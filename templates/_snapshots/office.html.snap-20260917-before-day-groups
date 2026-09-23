@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}办公平台 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-briefcase"></i> 办公平台</h2>
+  <form class="d-flex gap-2" method="get" action="/office/search/">
+    <input type="text" name="q" class="form-control form-control-sm" style="width:240px;" placeholder="全网检索关键词…" required>
+    <button class="btn btn-sm btn-outline-primary"><i class="bi bi-globe2"></i> 检索全网</button>
+  </form>
+</div>
+<p class="text-muted small">行政管理 · 基层党建 · 网络运维。记录工作事宜，按知识库与你的风格献策，并生成日报 / 周报 / 月报 / 年报。</p>
+
+<!-- ① 记录工作事宜（置顶） -->
+<div class="row g-4 mb-1">
+  <div class="col-12">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-transparent fw-semibold">记录工作事宜</div>
+      <div class="card-body">
+        <form method="post" action="/office/work_add/" class="row g-2 align-items-stretch">
+          {% csrf_token %}
+          <!-- 左侧：分类（上） + 状态（下） -->
+          <div class="col-lg-3 d-flex flex-column gap-2">
+            <select name="category" class="form-select form-select-sm">
+              {% for k,l in cats.items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}
+            </select>
+            <input name="status" class="form-control form-control-sm" placeholder="状态（可选）">
+          </div>
+          <!-- 右侧：大输入框 + 记录按钮 -->
+          <div class="col-lg-9 d-flex flex-column gap-2">
+            <textarea name="content" class="form-control" rows="3" placeholder="今天做了什么 / 待办…" required></textarea>
+            <button class="btn btn-primary btn-sm align-self-start"><i class="bi bi-plus-lg"></i> 记录</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">工作记录（最近）</div>
+      <ul class="list-group list-group-flush">
+        {% for r in records %}
+        <li class="list-group-item"><div class="d-flex justify-content-between"><span><span class="badge bg-light text-dark">{{ r.get_category_display }}</span> {{ r.content }}</span><small class="text-muted">{{ r.date|date:'m-d' }}{% if r.status %} · {{ r.status }}{% endif %}</small></div></li>
+        {% empty %}<li class="list-group-item text-muted small">暂无记录。</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ② 三类工作台（居中） -->
+<div class="row g-3 my-4">
+  {% for key,label in cats.items %}
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-folder2-open text-primary"></i> {{ label }}</h5>
+        <p class="text-muted small mb-3">记录与跟进本类工作事宜，沉淀为可检索的知识。</p>
+        <a href="/office/?cat={{ key }}" class="btn btn-sm btn-outline-primary">进入</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ③ 生成报告（置底） -->
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">生成报告</div>
+      <div class="card-body">
+        <p class="small text-muted">基于工作记录，按你的风格生成汇报文档（可先到「系统设置」填写个人风格）。</p>
+        <form method="post" action="/office/report_gen/" class="d-grid gap-2" style="max-width:560px;">
+          {% csrf_token %}
+          {% for k,l in kinds.items %}
+          <button name="kind" value="{{ k }}" class="btn btn-outline-primary btn-sm text-start"><i class="bi bi-file-earmark-text"></i> 生成{{ l }}</button>
+          {% endfor %}
+        </form>
+        <hr>
+        <h6 class="small">已生成报告</h6>
+        <ul class="list-unstyled small mb-0">
+          {% for rep in reports %}
+          <li><a href="/office/report/{{ rep.pk }}/">{{ rep.get_kind_display }}</a> <span class="text-muted">· {{ rep.range_start }}~{{ rep.range_end }}</span></li>
+          {% empty %}<li class="text-muted">还没有报告。</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

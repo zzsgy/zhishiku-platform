@@ -1,0 +1,24 @@
+# ZhiShiKu Knowledge Platform - OPTIONAL / heavy dependencies
+#
+# NOT needed to run the platform. Install only if you want:
+#   * 视频转图文  (video -> article)
+#   * 图片 OCR    (also needs the Tesseract-OCR binary installed separately)
+#   * 语音转写    (speech to text; this is the one that pulls in PyTorch)
+#
+# Install:  pip install -r requirements-optional.txt
+# or:       install\install.cmd --full
+#
+# NOTE: openai-whisper pulls in PyTorch, so this file adds several GB and
+# takes a long time to download. The platform degrades gracefully without it:
+# core/media.py imports these modules lazily, inside the feature functions.
+
+# video download / extraction
+yt-dlp
+moviepy
+imageio-ffmpeg
+
+# OCR (python side; the tesseract.exe binary must be installed separately)
+pytesseract
+
+# speech to text (brings in torch + numba)
+openai-whisper

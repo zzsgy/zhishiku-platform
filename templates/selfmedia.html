@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}自媒体 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="bi bi-megaphone"></i> 自媒体</h2>
+  <span class="text-muted small">选题与文案草稿工作台</span>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="post" action="/selfmedia/create/">
+      {% csrf_token %}
+      <div class="row g-2">
+        <div class="col-md-3"><input name="title" class="form-control" placeholder="选题 / 标题" required></div>
+        <div class="col-md-2">
+          <select name="platform" class="form-select">
+            <option value="">平台（可选）</option>
+            <option>公众号</option>
+            <option>抖音</option>
+            <option>小红书</option>
+            <option>知乎</option>
+            <option>微博</option>
+            <option>通用</option>
+          </select>
+        </div>
+        <div class="col-md-7"><textarea name="content_md" class="form-control" rows="2" placeholder="文案正文（Markdown），可先写提纲…"></textarea></div>
+        <div class="col-12"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 保存草稿</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for n in nodes %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start mb-1 gap-2">
+          <h6 class="card-title mb-0"><a href="/wiki/node/{{ n.pk }}/">{{ n.title }}</a></h6>
+          {% if n.tags %}<span class="badge bg-light text-dark border flex-shrink-0">{{ n.tags }}</span>{% endif %}
+        </div>
+        <p class="small text-muted flex-grow-1">{{ n.content_md|truncatechars:120|default:'（暂无正文）' }}</p>
+        <p class="small text-muted mb-2">更新于 {{ n.updated|date:'m-d H:i' }}</p>
+        <div class="btn-group btn-group-sm" role="group">
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ n.pk }}"><i class="bi bi-pencil"></i> 编辑</button>
+          <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#polishModal" data-id="{{ n.pk }}" data-title="{{ n.title }}"><i class="bi bi-stars"></i> AI 润色</button>
+          <form method="post" action="/selfmedia/delete/{{ n.pk }}/" class="d-inline" onsubmit="return confirm('确认删除该草稿？此操作不可恢复。');">
+            {% csrf_token %}<button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="d-none" id="nt-{{ n.pk }}">{{ n.title }}</span>
+  <span class="d-none" id="nc-{{ n.pk }}">{{ n.content_md }}</span>
+  {% empty %}
+  <div class="col-12"><div class="alert alert-light">还没有自媒体草稿。记下第一个选题吧。</div></div>
+  {% endfor %}
+</div>
+
+<!-- 编辑模态 -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="" id="editForm">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">编辑草稿</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input name="title" id="editTitle" class="form-control mb-2" placeholder="选题 / 标题">
+          <textarea name="content_md" id="editContent" class="form-control" rows="12" style="font-family:monospace;" placeholder="文案正文（Markdown）"></textarea>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button><button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save"></i> 保存</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- AI 润色模态 -->
+<div class="modal fade" id="polishModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">AI 润色 · <span id="polishTitle"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div id="polishLoading" class="text-muted small"><i class="bi bi-hourglass-split"></i> 正在调用 AI 润色…</div>
+        <div id="polishResult" class="d-none">
+          <div id="polishText" class="border rounded p-2 mb-2" style="white-space:pre-wrap;max-height:50vh;overflow:auto;"></div>
+          <button class="btn btn-sm btn-outline-secondary" id="polishCopy"><i class="bi bi-clipboard"></i> 复制</button>
+          <button class="btn btn-sm btn-primary" id="polishApply"><i class="bi bi-check-lg"></i> 采用并保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return m ? decodeURIComponent(m[2]) : '';
+  }
+
+  var editModal = document.getElementById('editModal');
+  if (editModal) {
+    editModal.addEventListener('show.bs.modal', function (e) {
+      var id = e.relatedTarget.getAttribute('data-id');
+      document.getElementById('editForm').action = '/selfmedia/edit/' + id + '/';
+      document.getElementById('editTitle').value = (document.getElementById('nt-' + id) || {}).textContent || '';
+      document.getElementById('editContent').value = (document.getElementById('nc-' + id) || {}).textContent || '';
+    });
+  }
+
+  var polishModal = document.getElementById('polishModal');
+  if (polishModal) {
+    var currentId = null;
+    polishModal.addEventListener('show.bs.modal', function (e) {
+      var btn = e.relatedTarget;
+      currentId = btn.getAttribute('data-id');
+      document.getElementById('polishTitle').textContent = btn.getAttribute('data-title') || '';
+      document.getElementById('polishLoading').classList.remove('d-none');
+      document.getElementById('polishResult').classList.add('d-none');
+      fetch('/selfmedia/ai_polish/' + currentId + '/', {
+        method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          document.getElementById('polishLoading').classList.add('d-none');
+          if (!d.ok) { alert('润色失败：' + (d.error || '')); return; }
+          document.getElementById('polishText').textContent = d.polished;
+          document.getElementById('polishResult').classList.remove('d-none');
+          var warn = document.getElementById('polishWarn');
+          if (warn) { if (d.degraded) warn.classList.remove('d-none'); else warn.classList.add('d-none'); }
+        })
+        .catch(function () { document.getElementById('polishLoading').classList.add('d-none'); alert('网络错误'); });
+    });
+    document.getElementById('polishCopy').addEventListener('click', function () {
+      var t = document.getElementById('polishText').textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(t);
+    });
+    document.getElementById('polishApply').addEventListener('click', function () {
+      if (!currentId) return;
+      var fd = new FormData();
+      fd.append('title', document.getElementById('polishTitle').textContent);
+      fd.append('content_md', document.getElementById('polishText').textContent);
+      fetch('/selfmedia/edit/' + currentId + '/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(function (r) { if (r.ok || r.redirected) location.reload(); else alert('保存失败'); })
+        .catch(function () { alert('保存失败'); });
+    });
+  }
+})();
+</script>
+{% endblock %}

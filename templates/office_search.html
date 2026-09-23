@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}全网检索 - {{ platform_name }}{% endblock %}
+{% block content %}
+{% comment %}
+  聚合检索结果页：入口是全局顶栏（base.html）的搜索框 + 「范围」选择器。
+  范围 = 知识库(kb) / 办公平台(office) / 全网(web) 的任意组合，缺省 = 全选；
+  展示规则：按「知识库 → 办公平台 → 全网」固定顺序分组，每组头部标注命中数，
+  每条结果带出处徽标（范围 + 子类）与来源 meta（所属库/分类/域名）；
+  0 命中的范围也保留分组并明示，保证聚合透明。
+  （本文件多行注释必须用 comment 块语法，行内 {# #} 不支持跨行，跨行会原文泄漏到页面。）
+{% endcomment %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-globe2"></i> 全网检索</h2>
+  <a href="/office/#office-search" class="btn btn-outline-secondary btn-sm">到办公平台统一搜索</a>
+</div>
+<p class="text-muted small">
+  在任意页面使用顶部搜索栏即可发起；范围支持「知识库 / 办公平台 / 全网」单选、多选或全选（顶栏「范围」下拉）。
+  本页按固定顺序分组聚合，每条结果均注明出处。
+</p>
+
+{% if q %}
+  <p class="text-muted small">
+    关于「{{ q }}」共命中 {{ total }} 条：
+    {% for g in groups %}<span class="badge text-bg-light border"><i class="bi {{ g.icon }}"></i> {{ g.label }} {{ g.count }} 条</span> {% endfor %}
+  </p>
+
+  {% for g in groups %}
+  <section class="kb-scope-section" data-scope="{{ g.key }}">
+    <div class="d-flex align-items-center flex-wrap gap-2 kb-scope-sec-head">
+      <i class="bi {{ g.icon }}"></i>
+      <h5 class="mb-0">{{ g.label }}</h5>
+      <span class="badge text-bg-secondary">{{ g.count }} 条</span>
+      {% if g.more %}<span class="text-muted small">仅显示前 {{ g.limit }} 条</span>{% endif %}
+    </div>
+
+    {% if g.subs %}
+      {% for sub in g.subs %}
+      <div class="kb-scope-sub">
+        <div class="small text-muted mb-2"><i class="bi bi-{{ sub.icon }}"></i> {{ sub.label }} · 命中 {{ sub.count }} 条{% if sub.more %}（仅显示前 {{ sub.limit }} 条）{% endif %}</div>
+        {% if sub.items %}
+        <div class="row g-3">
+          {% for item in sub.items %}
+          <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+              <div class="card-body">
+                <h6 class="card-title mb-1"><a href="{{ item.url }}">{{ item.title }}</a></h6>
+                <p class="small text-muted mb-2">
+                  <span class="badge kb-src-badge">{{ g.label }} · {{ sub.label }}</span>{{ item.meta }}
+                </p>
+                <p class="small mb-0">{{ item.snippet|safe }}</p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<div class="alert alert-light py-2 small mb-0">该范围没有命中结果。</div>{% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      {% if g.items %}
+      <div class="row g-3">
+        {% for item in g.items %}
+        <div class="col-md-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h6 class="card-title mb-1"><a href="{{ item.url }}" {% if g.key == 'web' %}target="_blank" rel="noopener"{% endif %}>{{ item.title }}</a></h6>
+              <p class="small text-muted mb-2 text-truncate">
+                <span class="badge kb-src-badge">{{ g.label }}</span>{% if item.meta %}{{ item.meta }}{% else %}{{ item.url }}{% endif %}
+              </p>
+              <p class="small mb-0">{% if item.safe %}{{ item.snippet|safe }}{% else %}{{ item.snippet }}{% endif %}</p>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="alert alert-light py-2 small mb-0">该范围没有命中结果。</div>{% endif %}
+    {% endif %}
+  </section>
+  {% endfor %}
+{% else %}
+<div class="alert alert-light">
+  <i class="bi bi-arrow-up"></i> 在上方全局搜索栏输入关键词，选择范围（单选 / 多选 / 全选），按 Enter 或点「检索」开始。
+</div>
+{% endif %}
+{% endblock %}

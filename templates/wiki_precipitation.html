@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+{% block title %}知识沉淀 - 智识库{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-arrow-down-circle"></i> 知识沉淀</h2>
+    <p class="text-muted small mb-0">将知识库 / 办公平台产生的文件交给 AI 提炼核心信息，沉淀进 WiKI 知识层。原始资料始终只读，提炼产物为独立草稿，可「采纳 / 编辑 / 丢弃」。</p>
+  </div>
+  <div>
+    <a href="/wiki/" class="btn btn-outline-secondary btn-sm">返回 WiKI 层</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-7">
+    <!-- 发起提炼：来源选择器 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold"><i class="bi bi-funnel"></i> 选择来源（可多选）</div>
+      <div class="card-body">
+        <form id="precipForm">
+          {% csrf_token %}
+          <div class="accordion" id="srcAcc">
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#srcKb" aria-expanded="false">知识库节点（{{ kb_nodes|length }}）</button></h2>
+              <div id="srcKb" class="accordion-collapse collapse" data-bs-parent="#srcAcc">
+                <div class="accordion-body" style="max-height:240px;overflow:auto">
+                  {% for n in kb_nodes %}<label class="kb-src-opt d-block"><input type="checkbox" value="kb_node:{{ n.pk }}"> {{ n.title }} <span class="text-muted small">{{ n.get_node_type_display }}{% if n.category %}·{{ n.category }}{% endif %}</span></label>{% empty %}<span class="text-muted small">暂无已采纳节点</span>{% endfor %}
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#srcAdv" aria-expanded="false">办公平台·献策（{{ advises|length }}）</button></h2>
+              <div id="srcAdv" class="accordion-collapse collapse" data-bs-parent="#srcAcc">
+                <div class="accordion-body" style="max-height:240px;overflow:auto">
+                  {% for a in advises %}<label class="kb-src-opt d-block"><input type="checkbox" value="office_advise:{{ a.pk }}"> {{ a.title }}</label>{% empty %}<span class="text-muted small">暂无献策记录</span>{% endfor %}
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#srcRep" aria-expanded="false">办公平台·报告（{{ reports|length }}）</button></h2>
+              <div id="srcRep" class="accordion-collapse collapse" data-bs-parent="#srcAcc">
+                <div class="accordion-body" style="max-height:240px;overflow:auto">
+                  {% for r in reports %}<label class="kb-src-opt d-block"><input type="checkbox" value="office_report:{{ r.pk }}"> {{ r.title }}</label>{% empty %}<span class="text-muted small">暂无报告记录</span>{% endfor %}
+                </div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#srcWf" aria-expanded="false">办公平台·工作文件（{{ workfiles|length }}）</button></h2>
+              <div id="srcWf" class="accordion-collapse collapse" data-bs-parent="#srcAcc">
+                <div class="accordion-body" style="max-height:240px;overflow:auto">
+                  {% for w in workfiles %}<label class="kb-src-opt d-block"><input type="checkbox" value="office_workfile:{{ w.pk }}"> {{ w.title }} <span class="text-muted small">{{ w.category }}</span></label>{% empty %}<span class="text-muted small">暂无工作文件</span>{% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <span class="small text-muted" id="srcCount">已选 0 项</span>
+            <button type="submit" class="btn btn-primary btn-sm" id="precipSubmit"><i class="bi bi-stars"></i> 交给 AI 提炼</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <!-- 待处理草稿 -->
+    <div class="card shadow-sm">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span><i class="bi bi-hourglass-split"></i> 待处理草稿（{{ pending|length }}）</span>
+        <a href="/wiki/" class="small">查看已采纳 →</a>
+      </div>
+      <div class="card-body">
+        {% for p in pending %}
+        <div class="kb-precip-item border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <a href="/wiki/node/{{ p.node.pk }}/" class="fw-semibold text-decoration-none">{{ p.node.title }}</a>
+            <span class="badge bg-warning text-dark">待处理</span>
+          </div>
+          <div class="small text-muted mb-1">
+            来源：
+            {% if p.origin.origins %}
+              {% for o in p.origin.origins %}
+                {% if o.exists %}<a href="{{ o.url }}" class="kb-origin-link">{{ o.label|default:'原文' }}</a>{% else %}<span class="kb-origin-deleted">{{ o.label|default:'原文' }}（原文已删除）</span>{% endif %}
+                {% if not forloop.last %} · {% endif %}
+              {% endfor %}
+            {% else %}{{ p.node.origin_title|default:'—' }}{% endif %}
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <form method="post" action="/wiki/precipitation/adopt/{{ p.node.pk }}/" class="d-inline kb-adopt-form">
+              {% csrf_token %}<button type="submit" class="btn btn-success btn-sm py-0"><i class="bi bi-check-lg"></i> 采纳</button>
+            </form>
+            <a href="/wiki/node/{{ p.node.pk }}/edit/" class="btn btn-outline-primary btn-sm py-0">编辑</a>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 kb-grow" data-pk="{{ p.node.pk }}"><i class="bi bi-stars"></i> 自生长</button>
+            <form method="post" action="/wiki/precipitation/discard/{{ p.node.pk }}/" class="d-inline kb-discard-form" data-confirm="确定丢弃？不影响原始文档。">
+              {% csrf_token %}<button type="submit" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-x-lg"></i> 丢弃</button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-muted small mb-0">暂无待处理草稿。在左侧选择来源后点「交给 AI 提炼」即可生成。</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+  (function () {
+    var form = document.getElementById('precipForm');
+    if (!form) return;
+    var boxes = Array.prototype.slice.call(form.querySelectorAll('input[type=checkbox]'));
+    var countEl = document.getElementById('srcCount');
+    var submit = document.getElementById('precipSubmit');
+    function syncCount() {
+      var n = boxes.filter(function (b) { return b.checked; }).length;
+      countEl.textContent = '已选 ' + n + ' 项';
+    }
+    boxes.forEach(function (b) { b.addEventListener('change', syncCount); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var sources = boxes.filter(function (b) { return b.checked; }).map(function (b) {
+        var p = b.value.split(':'); return { type: p[0], ref: p[1] };
+      });
+      if (!sources.length) { alert('请至少选择一个来源'); return; }
+      submit.disabled = true; submit.textContent = '提炼中…';
+      fetch('/wiki/api/extract/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({ sources: sources })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) { alert('已生成草稿《' + d.title + '》，请在待处理列表采纳或编辑。'); location.reload(); }
+        else { alert('提炼失败：' + (d.error || '未知错误')); submit.disabled = false; submit.textContent = '交给 AI 提炼'; }
+      }).catch(function (err) { alert('请求失败：' + err); submit.disabled = false; submit.textContent = '交给 AI 提炼'; });
+    });
+
+    // 待处理列表中的「自生长」按钮
+    Array.prototype.slice.call(document.querySelectorAll('.kb-grow')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!confirm('对该草稿调用 AI 自生长（补全分类/定义/双链）？')) return;
+        btn.disabled = true; btn.textContent = '生长中…';
+        fetch('/wiki/node/' + btn.dataset.pk + '/grow/', {
+          method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { alert('自生长完成：' + (d.changed || []).join('、')); location.reload(); }
+          else { alert('失败：' + (d.error || '未知')); btn.disabled = false; btn.textContent = '自生长'; }
+        }).catch(function (e) { alert('请求失败：' + e); btn.disabled = false; btn.textContent = '自生长'; });
+      });
+    });
+
+    // 待处理列表中的「采纳」按钮：AJAX 提交，成功后原地刷新沉淀页（不再停在 JSON 文本页）
+    Array.prototype.slice.call(document.querySelectorAll('.kb-adopt-form')).forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = form.querySelector('button');
+        btn.disabled = true; btn.textContent = '采纳中…';
+        fetch(form.action, {
+          method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest'}
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { location.reload(); }
+          else { alert('采纳失败：' + (d.error || '未知错误')); btn.disabled = false; btn.textContent = '采纳'; }
+        }).catch(function (err) { alert('请求失败：' + err); btn.disabled = false; btn.textContent = '采纳'; });
+      });
+    });
+
+    // 待处理列表中的「丢弃」按钮：先确认，再 AJAX 提交（逻辑与采纳一致）
+    Array.prototype.slice.call(document.querySelectorAll('.kb-discard-form')).forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (form.dataset.confirm && !confirm(form.dataset.confirm)) { return; }
+        var btn = form.querySelector('button');
+        btn.disabled = true; btn.textContent = '丢弃中…';
+        fetch(form.action, {
+          method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest'}
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { location.reload(); }
+          else { alert('丢弃失败：' + (d.error || '未知错误')); btn.disabled = false; btn.textContent = '丢弃'; }
+        }).catch(function (err) { alert('请求失败：' + err); btn.disabled = false; btn.textContent = '丢弃'; });
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}链接库 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="bi bi-link-45deg"></i> 链接库</h2>
+  <a href="/knowledgebase/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> 知识库</a>
+</div>
+<p class="text-muted small">知识收集过程中解析失败或无法解析的链接在此归档，可统一回访、重试解析或作废。</p>
+
+<!-- 统计卡 -->
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3"><div class="card border-warning-subtle"><div class="card-body py-2"><div class="small text-muted">待处理</div><div class="h4 mb-0">{{ pending }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card border-success-subtle"><div class="card-body py-2"><div class="small text-muted">链接归档</div><div class="h4 mb-0">{{ archived }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card border-secondary-subtle"><div class="card-body py-2"><div class="small text-muted">已作废</div><div class="h4 mb-0">{{ invalid }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body py-2"><div class="small text-muted">总计</div><div class="h4 mb-0">{{ total }}</div></div></div></div>
+</div>
+
+<!-- 筛选 -->
+<form class="row g-2 mb-3" method="get" action="/knowledgebase/links/">
+  <div class="col-12 col-md-3"><input type="text" name="q" value="{{ filters.q }}" class="form-control form-control-sm" placeholder="搜索标题/链接…"></div>
+  <div class="col-6 col-md-2">
+    <select name="source" class="form-select form-select-sm">
+      <option value="">来源全部</option>
+      {% for v,l in source_choices %}<option value="{{ v }}" {% if filters.source == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-md-2">
+    <select name="link_type" class="form-select form-select-sm">
+      <option value="">类型全部</option>
+      {% for v,l in type_choices %}<option value="{{ v }}" {% if filters.link_type == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-md-2">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">状态全部</option>
+      {% for v,l in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-md-2">
+    <select name="domain" class="form-select form-select-sm">
+      <option value="">域名全部</option>
+      {% for d in domains %}<option value="{{ d }}" {% if filters.domain == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-md-1"><button class="btn btn-sm btn-primary w-100">筛选</button></div>
+</form>
+
+<!-- 列表 -->
+<div class="card shadow-sm">
+  <div class="card-header bg-transparent small fw-semibold"><i class="bi bi-list-ul"></i> 链接列表（{{ total }}）</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table table-hover mb-0 small align-middle">
+      <thead><tr>
+        <th>标题/链接</th><th>来源</th><th>类型</th><th>无法解析原因</th><th>状态</th><th>标签</th><th>采集时间</th><th>域名</th><th>重试</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+        {% for it in items %}
+        <tr id="row-{{ it.pk }}">
+          <td>
+            <div class="text-truncate" style="max-width:240px;"><a href="{{ it.url }}" target="_blank" title="{{ it.url }}">{{ it.title|default:it.url }}</a></div>
+            {% if it.note %}<div class="text-muted">{{ it.note|truncatechars:40 }}</div>{% endif %}
+          </td>
+          <td>{{ it.get_source_display }}</td>
+          <td>{{ it.get_link_type_display }}</td>
+          <td>{{ it.get_unparse_reason_display }}</td>
+          <td>
+            {% if it.status == 'pending' %}<span class="badge bg-warning text-dark">待处理</span>
+            {% elif it.status == 'archived' %}<span class="badge bg-success">链接归档</span>
+            {% else %}<span class="badge bg-secondary">已作废</span>{% endif %}
+          </td>
+          <td>{{ it.tags|default:'—' }}</td>
+          <td>{{ it.collected_at|date:'m-d H:i' }}</td>
+          <td>{{ it.domain|default:'—' }}</td>
+          <td>{{ it.retry_count }}</td>
+          <td class="text-nowrap">
+            {% if it.status == 'pending' %}
+            <button class="btn btn-sm btn-outline-primary py-0" onclick="archiveLink({{ it.pk }})" title="标记为链接归档"><i class="bi bi-inboxes"></i> 链接入库</button>
+            {% endif %}
+            <button class="btn btn-sm btn-outline-secondary py-0" onclick="retryLink({{ it.pk }})" title="重试解析"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn btn-sm btn-outline-danger py-0" onclick="delLink({{ it.pk }})" title="删除"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4">链接库还空着，知识收集中解析失败的链接会自动归档到这里。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function postJSON(url, data){
+  return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)}).then(r=>r.json());
+}
+function archiveLink(pk){
+  postJSON('/knowledgebase/links/'+pk+'/status/', {status:'archived'}).then(d=>{
+    if(d.ok){ location.reload(); }
+    else { alert('操作失败：'+(d.error||'')); }
+  }).catch(()=>alert('请求失败，请重试'));
+}
+function retryLink(pk){
+  if(!confirm('确认重新解析该链接？')) return;
+  postJSON('/knowledgebase/links/'+pk+'/retry/', {}).then(d=>{
+    alert(d.reason || (d.ok?'完成':'失败'));
+    location.reload();
+  });
+}
+function delLink(pk){
+  if(!confirm('确认删除该链接记录？')) return;
+  postJSON('/knowledgebase/links/'+pk+'/delete/', {}).then(d=>{
+    if(d.ok){ location.reload(); }
+    else { alert('删除失败'); }
+  });
+}
+</script>
+{% endblock %}

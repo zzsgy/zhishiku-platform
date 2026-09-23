@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}总览 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-grid-1x2"></i> 总览</h2>
+  <span class="text-muted small">{{ platform_name }} · 工作台首页</span>
+</div>
+
+<!-- 统计卡 -->
+<div class="row g-3">
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-primary shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ base_count }}</div><div class="small">知识库</div></div></div></div>
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-success shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ node_count }}</div><div class="small">知识节点</div></div></div></div>
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-info shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ collection_count }}</div><div class="small">收集项</div></div></div></div>
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-secondary shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ edge_count }}</div><div class="small">关系边</div></div></div></div>
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-warning shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ insp_count }}</div><div class="small">灵感</div></div></div></div>
+  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-dark shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ golden_count }}</div><div class="small">金句</div></div></div></div>
+</div>
+
+<!-- 趋势图 -->
+<div class="card shadow-sm mt-4">
+  <div class="card-header bg-transparent fw-semibold"><i class="bi bi-graph-up"></i> 近 7 天趋势</div>
+  <div class="card-body"><div id="trendChart" style="height:280px;"></div></div>
+</div>
+
+<div class="row g-4 mt-1">
+  <!-- 快捷入口 -->
+  <div class="col-lg-7">
+    <h5 class="mb-3"><i class="bi bi-box-arrow-up-right"></i> 快捷入口</h5>
+    <div class="row g-2">
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/starmap/"><i class="bi bi-diagram-3"></i> 知识星图</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/wiki/"><i class="bi bi-journal-richtext"></i> WiKI层</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/bookshelf/"><i class="bi bi-bookshelf"></i> 书架</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/knowledgebase/"><i class="bi bi-archive"></i> 知识库</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/inspiration/"><i class="bi bi-lightbulb"></i> 灵感库</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/selfmedia/"><i class="bi bi-megaphone"></i> 自媒体</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/office/"><i class="bi bi-briefcase"></i> 办公平台</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/collection/"><i class="bi bi-collection"></i> 知识收集</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/runarchive/"><i class="bi bi-clock-history"></i> 运行档案</a></div>
+      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/settings/"><i class="bi bi-gear"></i> 系统设置</a></div>
+    </div>
+  </div>
+
+  <!-- 近期动态 -->
+  <div class="col-lg-5">
+    <h5 class="mb-3"><i class="bi bi-activity"></i> 近期动态</h5>
+    <ul class="list-group list-group-flush shadow-sm">
+      {% for l in recent_logs %}
+      <li class="list-group-item small d-flex justify-content-between">
+        <span><span class="badge bg-light text-dark">{{ l.module }}</span> {{ l.action }} {% if l.detail %}<span class="text-muted">· {{ l.detail|truncatechars:30 }}</span>{% endif %}</span>
+        <span class="text-muted">{{ l.created|date:'m-d H:i' }}</span>
+      </li>
+      {% empty %}<li class="list-group-item text-muted">暂无操作记录</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <h5 class="mb-3"><i class="bi bi-journal-richtext"></i> 最近知识节点</h5>
+    <div class="row g-2">
+      {% for n in recent_nodes %}
+      <div class="col-md-6 col-lg-3"><a href="/wiki/node/{{ n.pk }}/" class="text-decoration-none"><div class="card shadow-sm h-100"><div class="card-body py-2"><div class="small fw-semibold">{{ n.title }}</div><div class="text-muted" style="font-size:12px;">{{ n.get_node_type_display }} · {{ n.updated|date:'m-d H:i' }}</div></div></div></a></div>
+      {% empty %}<div class="col-12 text-muted small">还没有知识节点。</div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+(function () {
+  const box = document.getElementById('trendChart');
+  if (typeof echarts === 'undefined') {
+    box.innerHTML = '<div class="text-muted small py-4 text-center">📡 图表库（ECharts）加载失败，可能处于离线 / 内网环境。<br>联网后趋势图将自动显示。</div>';
+    return;
+  }
+  const chart = echarts.init(box);
+  const days = {{ days|safe }};
+  chart.setOption({
+    tooltip: {trigger:'axis'},
+    legend: {data:['操作日志','新增节点']},
+    grid: {left:'3%', right:'4%', bottom:'3%', containLabel:true},
+    xAxis: {type:'category', data: days},
+    yAxis: {type:'value', minInterval:1},
+    series: [
+      {name:'操作日志', type:'line', smooth:true, data: {{ log_trend|safe }}, itemStyle:{color:'#2563eb'}},
+      {name:'新增节点', type:'bar', data: {{ node_trend|safe }}, itemStyle:{color:'#16a34a'}, barWidth:'40%'}
+    ]
+  });
+  window.addEventListener('resize', () => chart.resize());
+})();
+</script>
+{% endblock %}

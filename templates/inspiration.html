@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}灵感库 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-lightbulb"></i> 灵感库</h2>
+  <a href="/knowledgebase/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> 知识库</a>
+</div>
+<p class="text-muted small">随身小记 · 任何阅读页划句即可收入</p>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white small fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> 已记下（{{ items|length }}）</span>
+        <span class="text-muted fw-normal">按时间倒序 · 最新在上</span>
+      </div>
+      <div class="insp-list">
+        {% for it in items %}
+        <div class="insp-item">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="insp-title flex-fill">{{ it.title }}</div>
+            <button class="btn btn-sm btn-link text-danger p-0 flex-shrink-0 insp-del" onclick="delInsp({{ it.pk }})" title="删除"><i class="bi bi-trash"></i></button>
+          </div>
+          {% if it.body %}<div class="insp-body">{{ it.body }}</div>{% endif %}
+          <div class="insp-meta">
+            {% if it.source_ref %}<span class="insp-chip"><i class="bi bi-tag"></i> {{ it.source_ref }}</span>{% endif %}
+            {% if it.context %}<span class="insp-chip"><i class="bi bi-card-text"></i> {{ it.context }}</span>{% endif %}
+            <span class="insp-chip insp-chip-time"><i class="bi bi-clock"></i> {{ it.created|date:'Y-m-d H:i' }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="insp-item insp-item-empty text-muted small">灵感库空空如也，去「随笔记」记下第一条，或在任意阅读页划句收入。</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* 灵感列表：全宽卡片条目，标题-正文-标签三层信息 */
+  .insp-list { padding: 14px; }
+  .insp-item {
+    border: 1px solid #e9ecef;
+    border-left: 3px solid #dee2e6;
+    border-radius: 10px;
+    background: #fff;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .insp-item:last-child { margin-bottom: 2px; }
+  .insp-item:hover {
+    border-color: #c9defc;
+    border-left-color: #0d6efd;
+    box-shadow: 0 2px 10px rgba(13, 110, 253, .08);
+    transform: translateY(-1px);
+  }
+  .insp-title {
+    font-weight: 600;
+    font-size: .95rem;
+    color: #212529;
+    word-break: break-word;
+    line-height: 1.45;
+  }
+  .insp-body {
+    margin-top: 6px;
+    color: #5b6470;
+    font-size: .875rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .insp-del { opacity: .35; transition: opacity .15s ease; }
+  .insp-item:hover .insp-del { opacity: 1; }
+  .insp-meta {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed #e9ecef;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  }
+  .insp-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: .78rem; color: #6c757d;
+    background: #f8f9fa;
+    border: 1px solid #eef0f2;
+    border-radius: 999px;
+    padding: 2px 9px;
+    max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .insp-chip-time { background: #fff; }
+  .insp-item-empty { border-style: dashed; text-align: center; padding: 28px 14px; }
+</style>
+
+<script>
+function delInsp(pk){
+  if(!confirm('删除这条灵感？')) return;
+  fetch('/inspiration/delete/'+pk+'/', {method:'POST', headers:{'X-CSRFToken':'{{ csrf_token }}'}})
+    .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+<ul class="wiki-tree" style="list-style:none; margin:0; padding-left: {% if depth == 0 %}0{% else %}1.25rem{% endif %};">
+  {% for n in nodes %}
+  <li class="wiki-tree-node" style="margin: 3px 0;">
+    <div class="wiki-tree-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span class="badge bg-light text-dark border">{{ n.get_node_type_display }}</span>
+      <a href="/wiki/node/{{ n.pk }}/" class="kb-wikilink-title fw-semibold">{{ n.title }}</a>
+      {% if n.category %}<span class="small text-muted">{{ n.category }}</span>{% endif %}
+      <span class="small text-muted">{{ n.updated|date:'m-d H:i' }}</span>
+      {% if n.children_list %}<span class="badge bg-secondary rounded-pill">{{ n.children_list|length }}</span>{% endif %}
+    </div>
+    {% if n.children_list and depth < 8 %}
+    {% include 'wiki_tree.html' with nodes=n.children_list depth=depth|add:1 %}
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>

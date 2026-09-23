@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}{{ rep.title }} - 办公平台{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-file-earmark-text"></i> {{ rep.title }}</h2>
+    <p class="text-muted small mb-0">
+      <span class="badge bg-primary-subtle text-primary-emphasis">{{ rep.get_kind_display }}</span>
+      {% if rep.range_label %}<span class="ms-1">报告区间 {{ rep.range_label }}</span>{% endif %}
+      <span class="ms-1">· 生成于 {{ rep.created|date:'Y-m-d H:i' }}</span>
+    </p>
+  </div>
+  <a href="/office/#report-form" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回办公平台</a>
+</div>
+
+{% if out_path %}
+<p class="text-muted small mb-3">
+  <i class="bi bi-folder2-open"></i> 输出文件：<code>{{ out_path }}</code>
+  {% if file_ok %}<span class="badge bg-success-subtle text-success-emphasis ms-1"><i class="bi bi-check2-circle"></i> 已在磁盘上</span>
+  {% else %}<span class="badge bg-warning-subtle text-warning-emphasis ms-1">未找到文件（记录仍在）</span>{% endif %}
+</p>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-body"><article class="kb-prose">{{ html|safe }}</article></div>
+</div>
+{% endblock %}

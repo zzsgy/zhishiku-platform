@@ -1,0 +1,29 @@
+# ============================================================
+#  换行符策略
+#  Windows 批处理必须是 CRLF，否则 cmd.exe 解析失败。
+#  （本项目已有此类踩坑记录，此处用版本控制层面固化。）
+# ============================================================
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# ---------- 二进制：禁止任何换行符转换 ----------
+*.exe   binary
+*.dll   binary
+*.zip   binary
+*.7z    binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.sqlite3 binary
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.pptx  binary
+*.mp4   binary
