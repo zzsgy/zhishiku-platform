@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}知识星图 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="bi bi-diagram-3"></i> 知识星图</h2>
+  <span class="text-muted small">{{ node_count }} 个节点 · {{ edge_count }} 条关系</span>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="small fw-bold text-muted mb-2">节点类型筛选</h6>
+        <div id="smFilter" class="d-flex flex-column gap-1"></div>
+      </div>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="small fw-bold text-muted mb-2">图例</h6>
+        <div id="smLegend" class="d-flex flex-column gap-1"></div>
+      </div>
+    </div>
+    <div class="card shadow-sm mt-3">
+      <div class="card-body" id="smInfo">
+        <p class="text-muted small mb-0">点击节点查看详情并高亮其关系。悬停查看标题。</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-9">
+    <p class="text-muted small">全部知识实体的关系网络。拖拽移动、滚轮缩放、点击节点高亮邻域。节点颜色区分类型。</p>
+    <div class="card shadow-sm">
+      <div class="card-body p-0 position-relative">
+        <div id="kbGraph" style="width:100%;height:72vh;background:var(--kb-bg);border-radius:10px;"></div>
+        <div id="smTooltip" class="position-absolute d-none shadow-sm rounded px-2 py-1 small" style="background:#fff;border:1px solid #e2e8f0;z-index:5;max-width:220px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if node_count == 0 %}
+<div class="alert alert-light mt-3">还没有知识节点。去「知识收集」导入，或在「WiKI 层」新建，关系图会自动生长。</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% vstatic 'vendor/d3.v7.min.js' %}"></script>
+<script>
+const graph = {{ graph_json|safe }};
+(function () {
+  const el = document.getElementById('kbGraph');
+  const tooltip = document.getElementById('smTooltip');
+  if (typeof d3 === 'undefined') {
+    el.innerHTML = '<div class="text-muted small py-4 text-center">📡 图谱库（D3）加载失败，可能处于离线 / 内网环境。<br>联网后知识星图将自动显示。</div>';
+    return;
+  }
+  if (!graph.nodes.length) return;
+
+  const W = el.clientWidth, H = el.clientHeight;
+  const svg = d3.select('#kbGraph').append('svg').attr('width', W).attr('height', H);
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.2, 3]).on('zoom', e => g.attr('transform', e.transform)));
+
+  const color = { wiki: '#2563eb', article: '#16a34a', doc: '#d97706', note: '#9333ea' };
+  const colorOf = d => color[d.type] || '#64748b';
+  const TYPES = { wiki: 'WiKI 页', article: '文章', doc: '资料', note: '笔记' };
+
+  const sim = d3.forceSimulation(graph.nodes)
+    .force('link', d3.forceLink(graph.links).id(d => d.id).distance(90))
+    .force('charge', d3.forceManyBody().strength(-260))
+    .force('center', d3.forceCenter(W / 2, H / 2));
+
+  const link = g.append('g').attr('stroke', '#cbd5e1').attr('stroke-width', 1.2)
+    .selectAll('line').data(graph.links).join('line');
+
+  const node = g.append('g').selectAll('g').data(graph.nodes).join('g')
+    .attr('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  node.append('circle').attr('r', 9).attr('fill', colorOf)
+    .attr('stroke', '#fff').attr('stroke-width', 1.5);
+  node.append('text').text(d => d.title).attr('x', 13).attr('y', 4)
+    .attr('font-size', 12).attr('fill', 'var(--kb-text)').attr('pointer-events', 'none');
+
+  // 邻域映射
+  const adj = {};
+  graph.links.forEach(l => {
+    adj[l.source.id || l.source] = adj[l.source.id || l.source] || new Set();
+    adj[l.target.id || l.target] = adj[l.target.id || l.target] || new Set();
+    adj[l.source.id || l.source].add(l.target.id || l.target);
+    adj[l.target.id || l.target].add(l.source.id || l.source);
+  });
+
+  let selected = null;
+  function highlight(d) {
+    selected = d.id;
+    const nb = adj[d.id] || new Set();
+    node.style('opacity', n => (n.id === d.id || nb.has(n.id)) ? 1 : 0.15);
+    link.style('opacity', l => ((l.source.id || l.source) === d.id || (l.target.id || l.target) === d.id) ? 1 : 0.08);
+    const info = document.getElementById('smInfo');
+    const tn = TYPES[d.type] || d.type || '未知';
+    info.innerHTML = '<h6 class="mb-1">' + esc(d.title) + '</h6>'
+      + '<p class="small text-muted mb-1">类型：' + tn + (d.category ? ' · ' + esc(d.category) : '') + '</p>'
+      + '<p class="small text-muted mb-2">关联：' + (nb.size) + ' 个节点</p>'
+      + '<a class="btn btn-sm btn-primary" href="/wiki/node/' + d.id + '/">打开知识页</a>';
+  }
+  function resetHighlight() {
+    selected = null;
+    node.style('opacity', 1);
+    link.style('opacity', 1);
+    document.getElementById('smInfo').innerHTML = '<p class="text-muted small mb-0">点击节点查看详情并高亮其关系。悬停查看标题。</p>';
+  }
+
+  node.on('click', (e, d) => { e.stopPropagation(); highlight(d); })
+    .on('mouseover', (e, d) => {
+      tooltip.textContent = d.title;
+      tooltip.style.left = (e.offsetX + 12) + 'px';
+      tooltip.style.top = (e.offsetY + 12) + 'px';
+      tooltip.classList.remove('d-none');
+    })
+    .on('mousemove', (e) => { tooltip.style.left = (e.offsetX + 12) + 'px'; tooltip.style.top = (e.offsetY + 12) + 'px'; })
+    .on('mouseout', () => tooltip.classList.add('d-none'));
+
+  svg.on('click', resetHighlight);
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // 类型筛选 + 图例
+  const present = {};
+  graph.nodes.forEach(n => { present[n.type] = (present[n.type] || 0) + 1; });
+  const filterBox = document.getElementById('smFilter');
+  const legendBox = document.getElementById('smLegend');
+  const visible = {};
+  Object.keys(present).forEach(t => {
+    visible[t] = true;
+    const label = TYPES[t] || t || '未知';
+    // 筛选复选框
+    const row = document.createElement('div');
+    row.className = 'form-check form-check-inline';
+    row.innerHTML = '<input class="form-check-input sm-flt" type="checkbox" value="' + t + '" id="flt-' + t + '" checked>'
+      + '<label class="form-check-label small" for="flt-' + t + '">' + label + ' <span class="text-muted">(' + present[t] + ')</span></label>';
+    filterBox.appendChild(row);
+    // 图例
+    const lg = document.createElement('div');
+    lg.className = 'd-flex align-items-center gap-2 small';
+    lg.innerHTML = '<span style="width:12px;height:12px;border-radius:50%;background:' + colorOf({ type: t }) + ';display:inline-block;"></span>' + label;
+    legendBox.appendChild(lg);
+  });
+  document.querySelectorAll('.sm-flt').forEach(cb => {
+    cb.addEventListener('change', () => {
+      visible[cb.value] = cb.checked;
+      node.style('display', n => visible[n.type] ? null : 'none');
+      link.style('display', l => (visible[(l.source.type)] && visible[(l.target.type)]) ? null : 'none');
+      if (selected && !visible[graph.nodes.find(n => n.id === selected).type]) resetHighlight();
+    });
+  });
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+})();
+</script>
+{% endblock %}

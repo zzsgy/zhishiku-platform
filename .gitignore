@@ -1,0 +1,71 @@
+# ============================================================
+#  智识库平台 .gitignore
+#  原则：只把「源代码」纳入版本控制；运行环境、数据、日志、
+#        临时产物一律排除（换机后由安装器重建）。
+# ============================================================
+
+# ---------- 1. 运行环境 / 体积巨大，且含本机绝对路径 ----------
+venv/
+.venv/
+env/
+
+# ffmpeg 等外部二进制（826 MB，换机由使用者自行放置）
+bin/
+
+# collectstatic 产物（可由 manage.py collectstatic 重新生成）
+static_collected/
+
+# ---------- 2. 数据与隐私：绝不入库 ----------
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# 用户上传的中转文件
+media/
+
+# ---------- 3. 运行时日志 ----------
+logs/
+*.log
+
+# ---------- 4. 开发/调试临时产物 ----------
+temp/
+_tmp_last.txt
+_z.txt
+probe_out.txt
+repro_out.txt
+*.tmp
+*.bak
+*.orig
+
+# 本地环境变量可能包含 API Key；仅允许提交示例文件
+.env
+.env.*
+!.env.example
+
+# ---------- 5. 备份输出包 ----------
+备份输出/
+*.zip
+
+# ---------- 6. Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------- 7. 编辑器 / 操作系统 ----------
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}{{ adv.title }} - 献策{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-lightbulb"></i> {{ adv.topic }}</h2>
+    <p class="text-muted small mb-0">
+      <span class="badge bg-primary-subtle text-primary-emphasis">{{ cat_label }}</span>
+      <span class="ms-1">{{ source_label }}</span>
+      <span class="ms-1">· 生成于 {{ adv.created|date:'Y-m-d H:i' }}</span>
+    </p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {# 献策的「再次找到」入口 2/2：详情页顶部与底部都给出回列表 / 回办公平台的固定地址 #}
+    <a href="/office/#ai-advise" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 返回办公平台 · 已生成献策</a>
+    <a href="/office/#office-search" class="btn btn-outline-primary btn-sm"><i class="bi bi-search"></i> 到统一搜索</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-9">
+    <div class="card shadow-sm">
+      <div class="card-body"><article class="kb-prose">{{ html|safe }}</article></div>
+    </div>
+  </div>
+  <div class="col-lg-3">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold"><i class="bi bi-folder2-open"></i> 输出文件</div>
+      <div class="card-body small">
+        <p class="mb-2 text-muted">
+          本次献策已落盘为 Markdown，可直接在 Obsidian / 文件管理器里打开。
+        </p>
+        <ul class="list-unstyled mb-2">
+          <li class="mb-1"><span class="text-muted">目录</span><br><code class="small">{{ out_dir }}</code></li>
+          <li><span class="text-muted">文件名</span><br><code class="small">{{ adv.file_name|default:'（未落盘）' }}</code></li>
+        </ul>
+        {% if file_ok %}
+        <span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-check2-circle"></i> 文件已在磁盘上</span>
+        {% else %}
+        <span class="badge bg-warning-subtle text-warning-emphasis"><i class="bi bi-exclamation-triangle"></i> 未找到文件（记录仍在，可重新生成）</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header small fw-semibold">知识库参考（{{ related|length }}）</div>
+      <ul class="list-group list-group-flush">
+        {% for n in related %}<li class="list-group-item small"><a href="/wiki/node/{{ n.pk }}/">{{ n.title }}</a></li>
+        {% empty %}<li class="list-group-item small text-muted">无直接相关资料</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p class="text-muted small mt-3 mb-0">
+  <i class="bi bi-signpost-2"></i> 下次想再找到这条献策，有三处入口：
+  ① 办公平台 →「AI 智能献策」→ 已生成献策列表；
+  ② 办公平台 → 顶部「统一搜索」选「搜献策」按主题或正文检索；
+  ③ 直接打开磁盘目录 <code>{{ out_dir }}</code>。
+</p>
+{% endblock %}

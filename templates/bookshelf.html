@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}书架 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-bookshelf"></i> 书架</h2>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBookModal">
+      <i class="bi bi-plus-lg"></i> 添加书籍
+    </button>
+    <a href="/bookshelf/golden/" class="btn btn-outline-warning btn-sm"><i class="bi bi-quote"></i> 金句库</a>
+  </div>
+</div>
+
+{% if err %}<div class="alert alert-warning alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle"></i> 请先提供<b>网页链接</b>或<b>本地文件</b>（二者至少其一），再点击「加入书架」。
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>
+</div>{% endif %}
+
+<!-- 书籍录入弹窗 -->
+<div class="modal fade" id="addBookModal" tabindex="-1" aria-labelledby="addBookModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="addBookModalLabel"><i class="bi bi-plus-lg"></i> 添加书籍</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        {% if err %}<div class="alert alert-warning py-2 small mb-3" role="alert">
+          <i class="bi bi-exclamation-triangle"></i> 请先提供<b>网页链接</b>或<b>本地文件</b>（二者至少其一），再点击「加入书架」。
+        </div>{% endif %}
+        <form id="addBookForm" method="post" action="/bookshelf/add/" enctype="multipart/form-data" class="row g-2 align-items-end">
+          {% csrf_token %}
+          <div class="col-md-4"><label class="form-label small">书名</label><input name="title" class="form-control form-control-sm" placeholder="留空则用文件名/网页标题"></div>
+          <div class="col-md-2"><label class="form-label small">作者</label><input name="author" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="form-label small">分类</label><input name="category" class="form-control form-control-sm" placeholder="如 心理/技术"></div>
+          <div class="col-md-2"><label class="form-label small">总页数</label><input name="total_pages" type="number" class="form-control form-control-sm" value="0"></div>
+          <div class="col-md-2"><label class="form-label small">网页链接（可选）</label><input type="url" name="url" class="form-control form-control-sm" placeholder="https://... 直接按链接添加"></div>
+          <div class="col-md-6"><label class="form-label small">本地文件（可选，支持 txt/md/docx/pdf/xlsx/html/各类文本）</label><input type="file" name="file" class="form-control form-control-sm"></div>
+          <div class="col-12"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 加入书架</button> <span class="text-muted small">二选一：填网页链接 或 上传本地文件</span></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <a href="/bookshelf/" class="btn btn-sm {% if not cat %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部</a>
+  {% for c in categories %}
+  <a href="/bookshelf/?cat={{ c }}" class="btn btn-sm {% if cat == c %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ c }}</a>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+  {% for b in books %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <h6 class="card-title mb-1"><a href="/bookshelf/book/{{ b.pk }}/">{{ b.title }}</a></h6>
+          <span class="badge bg-light text-dark">{{ b.get_status_display }}</span>
+        </div>
+        <p class="small text-muted mb-1">{{ b.author|default:'—' }} · {{ b.category|default:'未分类' }}</p>
+        <div class="progress mb-2" style="height:6px;">
+          <div class="progress-bar" style="width:{% widthratio b.progress b.total_pages 100 %}%"></div>
+        </div>
+        <p class="small text-muted mb-0">进度 {{ b.progress }}{% if b.total_pages %} / {{ b.total_pages }}{% endif %} 页 · {{ b.notes.count }} 笔记</p>
+        <div class="d-flex justify-content-end mt-2">
+          <form method="post" action="/bookshelf/book/{{ b.pk }}/delete/" onsubmit="return confirm('确定删除《{{ b.title }}》？此操作不可恢复，将同时删除本地文件与读书笔记。')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> 删除</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12"><div class="alert alert-light">书架空空，先加入一本书吧。</div></div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // 校验失败（?err=1）重定向回来时自动弹出录入弹窗，便于用户直接补填
+  (function () {
+    {% if err %}
+    var m = document.getElementById('addBookModal');
+    if (m && window.bootstrap) bootstrap.Modal.getOrCreateInstance(m).show();
+    {% endif %}
+  })();
+  // 加入书架前置校验：链接与文件至少其一，未提供则弹出提示并中止提交（与「知识收集」导入行为一致）
+  (function () {
+    var form = document.getElementById('addBookForm');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      var fileInput = form.querySelector('input[name="file"]');
+      var urlInput = form.querySelector('input[name="url"]');
+      var hasFile = fileInput && fileInput.value.trim() !== '';
+      var hasUrl = urlInput && urlInput.value.trim() !== '';
+      if (!hasFile && !hasUrl) {
+        e.preventDefault();
+        alert('请先提供网页链接或本地文件，二者至少选其一，再点击「加入书架」。');
+        if (urlInput) urlInput.focus();
+      }
+    });
+  })();
+</script>
+{% endblock %}

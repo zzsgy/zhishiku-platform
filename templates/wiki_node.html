@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}{{ node.title }} - 知识库{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0">{{ node.title }}</h2>
+    <p class="text-muted small mb-0">
+      {{ node.get_node_type_display }}
+      {% if node.category %}· {{ node.category }}{% endif %}
+      {% if node.tags %}· 标签：{{ node.tags }}{% endif %}
+    </p>
+  </div>
+  <div>
+    {% if node.origin_type and node.status == 'pending' %}
+      <form method="post" action="/wiki/precipitation/adopt/{{ node.pk }}/" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i> 采纳</button>
+      </form>
+      <form method="post" action="/wiki/precipitation/discard/{{ node.pk }}/" onsubmit="return confirm('确定丢弃该提炼草稿？此操作不可撤销，且不影响原始文档。')" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i> 丢弃</button>
+      </form>
+    {% endif %}
+    {% if node.node_type == 'wiki' %}
+      <button type="button" class="btn btn-outline-info btn-sm" id="kbGrowBtn"><i class="bi bi-stars"></i> AI 自生长</button>
+    {% endif %}
+    <a href="/wiki/node/{{ node.pk }}/edit/" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
+    <form method="post" action="/knowledgebase/node/{{ node.pk }}/delete/" onsubmit="return confirm('确定删除知识节点《{{ node.title }}》？将同时删除其阅读笔记与关联关系。')" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> 删除</button>
+    </form>
+    <a href="/knowledgebase/" class="btn btn-outline-secondary btn-sm">库总览</a>
+  </div>
+</div>
+
+{# 来源 / 沉淀状态（知识沉淀机制）：每条知识保留来源链接；原文删除时提示「原文已删除」 #}
+<div class="mb-3">
+  <div class="d-flex flex-wrap align-items-center gap-2 small text-muted">
+    {% if node.origin_type %}
+      <span class="badge {% if node.status == 'pending' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+        {% if node.status == 'pending' %}待处理草稿{% else %}已采纳{% endif %}
+      </span>
+      <span class="fw-semibold">来源：</span>
+      {% if origin and origin.origins %}
+        {% for o in origin.origins %}
+          {% if o.exists %}
+            <a href="{{ o.url }}" class="kb-origin-link"><i class="bi bi-link-45deg"></i> {{ o.label|default:'原文' }}</a>
+          {% else %}
+            <span class="kb-origin-deleted" title="原始文档已被删除，本条知识仍保留"><i class="bi bi-file-earmark-x"></i> {{ o.label|default:'原文' }}（原文已删除）</span>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endif %}
+    {% if node.ai_generated %}<span class="badge bg-info text-dark">AI 生成</span>{% endif %}
+  </div>
+</div>
+
+{% comment %}
+  结构约束：批注台（aside）必须排在正文（article）**之前**。
+  正文动辄几万像素高，批注台一旦在 DOM 里落在正文之后，任何一次样式失效
+  （旧缓存 / 断点错 / CSS 加载失败）都会把它推到正文末尾 —— 用户看到的是
+  「批注台被删除了」。放在前面后它最差也只是「出现在正文上方」，永不消失。
+  宽屏的「正文在左、批注台在右」由 theme.css 里 .kb-reader-main/-side 的
+  grid-column / grid-row 显式落位实现，不依赖 DOM 顺序，改序不影响版式。
+{% endcomment %}
+<div class="kb-reader">
+  <aside class="kb-reader-side" id="kbSidePanel" aria-label="批注台">
+    <!-- 批注台：阅读笔记 / 本文金句 / 反向链接 / 出链。
+         ≥992px 与正文并排（显式落位到右列）并吸顶常驻；<992px 上移到正文之前，
+         保证任何视口、任何样式状态下都一眼可见。 -->
+    <div class="kb-side-head">
+      <i class="bi bi-journal-text"></i> 批注台
+      <span class="kb-side-head-tip">笔记 · 金句 · 双向链接</span>
+    </div>
+
+    <!-- 阅读笔记（右侧边栏，阅读时随时查看与编辑，与书架阅读一致） -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span><i class="bi bi-pencil-square"></i> 阅读笔记（<span id="kbNoteCount">{{ notes|length }}</span>）</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/knowledgebase/node/{{ node.pk }}/note/" class="row g-2 mb-3">
+          {% csrf_token %}
+          <div class="col-4"><input name="location" class="form-control form-control-sm" placeholder="位置/页码"></div>
+          <div class="col-8"><input name="note" class="form-control form-control-sm" placeholder="写下你的想法…" required></div>
+          <div class="col-12"><button class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-lg"></i> 添加笔记</button></div>
+        </form>
+        <ul class="list-group list-group-flush kb-note-list" id="kbNoteList">
+          {% for n in notes %}
+          <li class="list-group-item">
+            <div class="small text-muted">{% if n.location %}📍 {{ n.location }} · {% endif %}{{ n.created|date:'m-d H:i' }}</div>
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="flex-fill">{{ n.note }}</div>
+              <button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="node_note" data-id="{{ n.pk }}" title="删除笔记"><i class="bi bi-trash"></i></button>
+            </div>
+          </li>
+          {% empty %}<li class="list-group-item text-muted small kb-note-empty">还没有笔记。选中正文文字可快速「记笔记」。</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- 金句 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold"><i class="bi bi-quote"></i> 本文金句（<span id="kbGoldenCount">{{ goldens|length }}</span>）</div>
+      <ul class="list-group list-group-flush" id="kbGoldenList">
+        {% for g in goldens %}<li class="list-group-item"><div class="d-flex justify-content-between align-items-start gap-2"><div class="flex-fill"><i class="bi bi-quote text-warning"></i> {{ g.text }}</div><button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="golden" data-id="{{ g.pk }}" title="删除金句"><i class="bi bi-trash"></i></button></div></li>
+        {% empty %}<li class="list-group-item text-muted small kb-golden-empty">划句时选「存金句」即可收录。</li>{% endfor %}
+      </ul>
+    </div>
+
+    <!-- 反向链接（被引用） -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold"><i class="bi bi-arrow-return-left"></i> 反向链接（被引用）</div>
+      <ul class="list-group list-group-flush">
+        {% for e in backlinks %}<li class="list-group-item small"><a href="/wiki/node/{{ e.source.pk }}/">{{ e.source.title }}</a></li>
+        {% empty %}<li class="list-group-item small text-muted">暂无</li>{% endfor %}
+      </ul>
+    </div>
+
+    <!-- 出链（引用） -->
+    <div class="card shadow-sm">
+      <div class="card-header small fw-semibold"><i class="bi bi-arrow-right"></i> 出链（引用）</div>
+      <ul class="list-group list-group-flush">
+        {% for e in outlinks %}<li class="list-group-item small"><a href="/wiki/node/{{ e.target.pk }}/">{{ e.target.title }}</a></li>
+        {% empty %}<li class="list-group-item small text-muted">暂无</li>{% endfor %}
+      </ul>
+    </div>
+  </aside>
+
+  <article class="kb-reader-main">
+    <!-- 阅读正文 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span>正文</span>
+        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
+      </div>
+      <div class="card-body">
+        <article class="kb-prose">{{ html|safe }}</article>
+      </div>
+    </div>
+  </article>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>window.KB_NODE_ID = {{ node.pk }}; window.KB_NODE_TITLE = "{{ node.title|escapejs }}";</script>
+<script src="{% vstatic 'js/selection.js' %}"></script>
+{% if node.node_type == 'wiki' %}
+<script>
+  (function () {
+    var btn = document.getElementById('kbGrowBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (!confirm('将对本文调用 AI 自生长：自动补全分类 / 定义 / [[双链]]。是否继续？')) return;
+      btn.disabled = true; btn.textContent = '生长中…';
+      fetch('/wiki/node/{{ node.pk }}/grow/', {
+        method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) { alert('AI 自生长完成：' + (d.changed || []).join('、') + '。页面将刷新。'); location.reload(); }
+        else { alert('自生长失败：' + (d.error || '未知错误')); btn.disabled = false; btn.textContent = 'AI 自生长'; }
+      }).catch(function (e) { alert('请求失败：' + e); btn.disabled = false; btn.textContent = 'AI 自生长'; });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,1023 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}办公平台 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="kb-page-head">
+  <div>
+    <span class="kb-eyebrow">WORK CENTER</span>
+    <h1>办公中心</h1>
+    <p>记录进展、生成建议和报告，集中管理工作资料。</p>
+  </div>
+  <a class="btn btn-outline-primary" href="/collection/"><i class="bi bi-file-earmark-arrow-up"></i> 导入工作文件</a>
+</div>
+
+<nav class="kb-workspace-tabs" id="officeTabs" aria-label="办公中心功能">
+  <button type="button" class="is-active" data-office-tab="records"><i class="bi bi-check2-square"></i><span>工作记录</span><small>{{ record_shown }}</small></button>
+  <button type="button" data-office-tab="advise"><i class="bi bi-stars"></i><span>智能献策</span><small>{{ advise_count }}</small></button>
+  <button type="button" data-office-tab="reports"><i class="bi bi-file-earmark-bar-graph"></i><span>报告中心</span><small>{{ report_count }}</small></button>
+  <button type="button" data-office-tab="files"><i class="bi bi-folder2-open"></i><span>工作文件</span><small>{{ workfile_all_total }}</small></button>
+</nav>
+
+<style>
+  html { scroll-behavior: smooth; }
+  /* ---------- 模块堆叠：五个模块自上而下的统一纵向节奏（仅布局，不含任何逻辑） ---------- */
+  .office-module { margin-bottom: 1.75rem; }
+  .office-module:last-child { margin-bottom: 0; }
+  @media (max-width: 575.98px) { .office-module { margin-bottom: 1.25rem; } }
+
+  /* ---------- 工作记录时间线 ---------- */
+  .wr-day { border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: .75rem 1rem .5rem; background: var(--bs-tertiary-bg, #f8f9fa); }
+  .wr-day + .wr-day { margin-top: .9rem; }
+  /* 按天分组改为左右并排：各占一半宽度（顺序仍按日期从左到右，逻辑不变） */
+  .wr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; align-items: start; }
+  .wr-grid .wr-day + .wr-day { margin-top: 0; }
+  .wr-grid > .text-muted { grid-column: 1 / -1; }
+  @media (max-width: 991.98px) { .wr-grid { grid-template-columns: 1fr; } }
+  .wr-day-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+  .wr-day-date { font-weight: 600; font-size: .95rem; }
+  .wr-day-count { font-size: .75rem; color: var(--bs-secondary-color); }
+  /* 日期卡片上的「归档」按钮：把本日记录移入归档分类 */
+  .wr-arch { border: 1px solid var(--bs-border-color); background: transparent; color: var(--bs-secondary-color); font-size: .72rem; line-height: 1.5; padding: 0 .45rem; border-radius: .35rem; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .wr-arch:hover:not(:disabled) { background: var(--bs-primary-bg-subtle, #cfe2ff); color: var(--bs-primary-text, #084298); border-color: var(--bs-primary); }
+  .wr-arch:disabled { opacity: .55; cursor: default; }
+  .wr-list { list-style: none; margin: 0; padding: 0 0 0 1.1rem; position: relative; }
+  .wr-list::before { content: ''; position: absolute; left: .32rem; top: .6rem; bottom: .6rem; width: 2px; background: var(--bs-border-color); border-radius: 1px; }
+  .wr-item { position: relative; padding: .35rem 0 .45rem; }
+  .wr-item::before { content: ''; position: absolute; left: -1.1rem; top: .78rem; width: .55rem; height: .55rem; border-radius: 50%; background: var(--bs-primary, #0d6efd); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--bs-border-color); }
+  .wr-item + .wr-item { border-top: 1px dashed var(--bs-border-color); }
+  .wr-main { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; }
+  .wr-content { min-width: 0; word-break: break-word; display: flex; align-items: center; gap: .5rem; }
+  .wr-meta { display: inline-flex; gap: .4rem; align-items: center; flex-shrink: 0; }
+  .wr-edit { cursor: pointer; border-radius: .35rem; padding: 0 .35rem; transition: background .15s; }
+  .wr-edit:hover { background: rgba(13,110,253,.12); }
+  .wr-cat { background: var(--bs-primary-bg-subtle, #cfe2ff); color: var(--bs-primary-text, #084298); }
+  .wr-status { background: var(--bs-primary-bg-subtle, #cfe2ff); color: var(--bs-primary-text, #084298); }
+  .wr-status-success { background: var(--bs-success-bg-subtle, #d1e7dd); color: var(--bs-success-text, #0f5132); }
+  .wr-status-warning { background: var(--bs-warning-bg-subtle, #fff3cd); color: #8a6d00; }
+  .wr-status.wr-status-empty { background: transparent; color: var(--bs-secondary-color); border: 1px dashed var(--bs-border-color); }
+  .wr-date { color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+  .wr-edit-input { font-size: .8rem; padding: 0 .3rem; border: 1px solid var(--bs-primary); border-radius: .3rem; }
+  .wr-check { width: 1.05rem; height: 1.05rem; flex-shrink: 0; cursor: pointer; align-self: center; }
+  .wr-check-label { display: inline-flex; align-items: center; gap: .4rem; }
+  .wr-del { border: none; background: transparent; color: var(--bs-secondary-color); cursor: pointer; padding: 0 .25rem; border-radius: .3rem; line-height: 1; transition: background .15s, color .15s; }
+  .wr-del:hover { background: var(--bs-danger-bg-subtle, #f8d7da); color: var(--bs-danger, #dc3545); }
+
+  /* ---------- 分类筛选卡片（整卡即筛选入口） ---------- */
+  .cat-card { color: inherit; transition: border-color .15s, box-shadow .15s, transform .15s; border: 1px solid var(--bs-border-color); }
+  .cat-card:hover, .cat-card:focus-visible { border-color: var(--bs-primary) !important; box-shadow: 0 .4rem 1rem rgba(13, 110, 253, .16) !important; transform: translateY(-2px); }
+  .cat-card.is-active { border: 2px solid var(--bs-primary) !important; background: var(--bs-primary-bg-subtle, #cfe2ff); }
+  .cat-card-hint { font-size: .75rem; }
+  .cat-card-meta { font-size: .72rem; }
+
+  /* ---------- 筛选联动反馈（局部刷新，无整页跳转） ---------- */
+  #office-scope.is-loading { opacity: .6; transition: opacity .15s ease-in-out; }
+  .office-flash { animation: officeFlash 1.15s ease-out 1; }
+  @keyframes officeFlash {
+    0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+    22% { box-shadow: 0 0 0 .32rem rgba(13, 110, 253, .26); }
+    100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+  }
+
+  /* ---------- 生成报告：区间选择 + 类型按钮 + 报告列表 ---------- */
+  .rg-range { border: 1px solid var(--bs-border-color); border-radius: .65rem; padding: .7rem .9rem; background: var(--bs-tertiary-bg, #f8f9fa); margin-bottom: 1rem; }
+  .rg-range-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem .9rem; }
+  .rg-field { display: flex; flex-direction: column; gap: .18rem; }
+  .rg-label { font-size: .72rem; color: var(--bs-secondary-color); letter-spacing: .02em; }
+  .rg-sep { color: var(--bs-secondary-color); padding-bottom: .3rem; font-size: .9rem; }
+  .rg-presets { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-left: auto; }
+  .rg-preset { font-size: .74rem; line-height: 1.45; padding: .12rem .55rem; border-radius: 999px; cursor: pointer;
+               border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); color: var(--bs-body-color);
+               transition: border-color .15s, color .15s, background .15s; }
+  .rg-preset:hover { border-color: var(--bs-primary); color: var(--bs-primary); }
+  .rg-preset:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 1px; }
+  .rg-range-note { font-size: .72rem; color: var(--bs-secondary-color); margin: .5rem 0 0; }
+
+  /* 类型按钮：每个按钮上实时显示「按当前区间将生成的报告名」 */
+  .rg-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem; }
+  .rg-type { display: flex; align-items: center; gap: .65rem; text-align: left; cursor: pointer;
+             padding: .6rem .7rem; border: 1px solid var(--bs-border-color); border-radius: .65rem;
+             background: var(--bs-body-bg); color: inherit;
+             transition: border-color .15s, box-shadow .15s, transform .15s; }
+  .rg-type:hover, .rg-type:focus-visible { border-color: var(--bs-primary); box-shadow: 0 .35rem .9rem rgba(13, 110, 253, .16); transform: translateY(-1px); }
+  .rg-type-icon { flex-shrink: 0; width: 2.1rem; height: 2.1rem; display: grid; place-items: center; font-size: 1.05rem;
+                  border-radius: .5rem; background: var(--bs-primary-bg-subtle, #cfe2ff); color: var(--bs-primary-text, #084298); }
+  .rg-type--weekly .rg-type-icon { background: var(--bs-info-bg-subtle, #cff4fc); color: var(--bs-info-text, #055160); }
+  .rg-type--monthly .rg-type-icon { background: var(--bs-warning-bg-subtle, #fff3cd); color: #8a6d00; }
+  .rg-type--yearly .rg-type-icon { background: var(--bs-success-bg-subtle, #d1e7dd); color: var(--bs-success-text, #0f5132); }
+  .rg-type-name { display: block; font-size: .9rem; font-weight: 600; }
+  .rg-type-preview { display: block; font-size: .74rem; color: var(--bs-secondary-color); margin-top: .1rem; font-variant-numeric: tabular-nums; }
+
+  /* 已生成报告 / 已生成献策：共用同一个「整行可点」行组件 .row-*（整行即链接，含日期）。
+     rg-* 只保留给报告模块专属的区间选择与类型按钮，避免两条列表用同一套类名造成语义混淆。 */
+  .row-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin: 1.35rem 0 .6rem; }
+  .row-list { display: flex; flex-direction: column; gap: .5rem; }
+  .row-item { display: flex; align-items: center; gap: .8rem; padding: .7rem .9rem; border: 1px solid var(--bs-border-color);
+              border-radius: .65rem; background: var(--bs-body-bg); color: inherit; text-decoration: none;
+              transition: border-color .15s, box-shadow .15s, background .15s; }
+  .row-item:hover, .row-item:focus-visible { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, #cfe2ff); box-shadow: 0 .3rem .8rem rgba(13, 110, 253, .14); color: inherit; }
+  .row-kind { flex-shrink: 0; font-size: .74rem; font-weight: 600; padding: .18rem .5rem; border-radius: .35rem;
+              background: var(--bs-primary-bg-subtle, #cfe2ff); color: var(--bs-primary-text, #084298); }
+  .row-kind--weekly { background: var(--bs-info-bg-subtle, #cff4fc); color: var(--bs-info-text, #055160); }
+  .row-kind--monthly { background: var(--bs-warning-bg-subtle, #fff3cd); color: #8a6d00; }
+  .row-kind--yearly { background: var(--bs-success-bg-subtle, #d1e7dd); color: var(--bs-success-text, #0f5132); }
+  .row-kind--advise { background: rgba(13,110,253,.12); color: var(--bs-primary-text, #084298); }
+  .row-title { font-size: .95rem; font-weight: 600; min-width: 0; word-break: break-all; }
+
+  /* ---------- 统一搜索（页面最前部的检索面板：文件 / 献策 / 报告） ---------- */
+  .os-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
+  .os-scopes { display: flex; flex-wrap: nowrap; gap: .3rem; padding: .18rem; border-radius: 999px;
+               background: var(--bs-tertiary-bg, #f8f9fa); border: 1px solid var(--bs-border-color); }
+  .os-scope { display: inline-flex; align-items: center; gap: .35rem; margin: 0; cursor: pointer;
+              padding: .18rem .7rem; border-radius: 999px; font-size: .78rem; line-height: 1.5;
+              color: var(--bs-secondary-color); white-space: nowrap; transition: background .15s, color .15s; }
+  .os-scope input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .os-scope:hover { color: var(--bs-primary); }
+  .os-scope.is-active { background: var(--bs-primary); color: #fff; font-weight: 600; }
+  .os-scope.is-active .os-scope-count { background: rgba(255,255,255,.28); color: #fff; }
+  .os-scope-count { font-size: .68rem; padding: 0 .32rem; border-radius: 999px;
+                    background: var(--bs-secondary-bg, #e9ecef); color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+  .os-input { display: flex; align-items: center; gap: .4rem; flex: 1 1 320px; min-width: 0; }
+  .os-input input.form-control { flex: 1 1 auto; min-width: 0; }
+  /* 与顶栏同一个坑：Bootstrap .form-control 自带 width:100%，在 flex 行里会把自己的
+     basis 撑满、把按钮挤到换行，「搜索」曾竖排成两行。输入框可收缩 + 按钮禁止换行。 */
+  .os-input .btn { white-space: nowrap; flex-shrink: 0; }
+  .os-hint { font-size: .74rem; color: var(--bs-secondary-color); margin-top: .55rem; }
+  .os-hint code { font-size: .72rem; color: var(--bs-primary-text, #084298); background: var(--bs-primary-bg-subtle, #cfe2ff); padding: 0 .28rem; border-radius: .25rem; }
+  .os-results { margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+  .os-group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .45rem; }
+  .os-group-name { font-size: .86rem; font-weight: 600; }
+  .os-items { display: flex; flex-direction: column; gap: .4rem; }
+  .os-item { display: flex; flex-direction: column; gap: .15rem; padding: .55rem .8rem; color: inherit;
+             text-decoration: none; border: 1px solid var(--bs-border-color); border-radius: .55rem;
+             background: var(--bs-body-bg); transition: border-color .15s, background .15s, box-shadow .15s; }
+  .os-item:hover, .os-item:focus-visible { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle, #cfe2ff);
+                                           box-shadow: 0 .3rem .8rem rgba(13,110,253,.14); color: inherit; }
+  .os-item-title { font-size: .9rem; font-weight: 600; word-break: break-word; }
+  .os-item-snippet { font-size: .78rem; color: var(--bs-secondary-color); word-break: break-word; }
+  .os-item-snippet mark { background: var(--bs-warning-bg-subtle, #fff3cd); color: inherit; padding: 0 .12rem; border-radius: .18rem; }
+  .os-item-meta { font-size: .72rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+  .os-empty { border: 1px dashed var(--bs-border-color); border-radius: .55rem; padding: .9rem; text-align: center; }
+  .os-jump { font-size: .74rem; }
+
+  .row-meta { margin-left: auto; display: flex; align-items: center; gap: .75rem; flex-shrink: 0; }
+  .row-when { font-size: .8rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+  .row-open { font-size: .8rem; color: var(--bs-primary); white-space: nowrap; }
+  .row-empty { border: 1px dashed var(--bs-border-color); border-radius: .65rem; padding: 1rem; text-align: center; }
+
+  /* 已生成献策 / 已生成报告：两条列表的内容改为左右双列（仅版式；数据、排序、链接一律不动）。
+     为什么卡片内部要顺带改成上下两段：半幅宽度里「徽标 | 标题 | 时间 | 打开」单行放不下，
+     而 .row-title 可收缩到 1 字宽，会被挤成逐字换行。故上段=徽标+标题，下段=时间+打开（右对齐）。
+     窄屏（<992px）退回单列，见文件末尾；≤575px 手机端标题再独占一行（避免日期区间被硬断）；
+     列表为空时提示块横跨整行。 */
+  #advise-list, #report-list { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; align-items: start; }
+  #advise-list .row-item, #report-list .row-item { flex-wrap: wrap; row-gap: .35rem; align-content: flex-start; min-width: 0; }
+  /* word-break:normal + overflow-wrap:anywhere：半幅宽度下优先按词/中文断行，长串（如日期区间）
+     才允许硬断；anywhere 还能让 min-content 收到 1 字，网格列不会被长标题顶宽。 */
+  #advise-list .row-title, #report-list .row-title { flex: 1 1 0; width: auto; word-break: normal; overflow-wrap: anywhere; }
+  #advise-list .row-meta, #report-list .row-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+  #advise-list .row-empty, #report-list .row-empty { grid-column: 1 / -1; }
+
+  /* ---------- 窄屏适配 ----------
+     位置要求：必须留在样式表末尾。以下规则要与前面的同名类竞争，同优先级时靠后者生效，
+     若前移会被上方 .wr-main / .wr-meta 的基础声明覆盖。
+     1) 外层 .kb-main 是 body 的 flex 项，浏览器默认 min-width:auto 会让它拒绝收缩到
+        内容最小宽度以下，本页因此在窄屏产生横向溢出；仅在本页放开该收缩。
+     2) 工作记录的元信息（类型 / 状态 / 日期 / 删除）原本单行不换行，极窄屏下会撑破卡片：
+        允许换行并放开收缩。
+     3) 统一搜索面板的范围按钮与输入框在窄屏改为整行堆叠（原页头「全网检索」输入框已上移
+        到全局顶栏，其窄屏规则由 static/css/theme.css 统一负责）。 */
+  .kb-main { min-width: 0; }
+  @media (max-width: 575.98px) {
+    .wr-main { flex-wrap: wrap; }
+    .wr-meta { flex-shrink: 1; min-width: 0; flex-wrap: wrap; justify-content: flex-end; row-gap: .25rem; }
+    /* 统一搜索：范围按钮换行、输入框整行。
+       注意 flex-wrap 必须一并改为 nowrap：column + wrap 时 flex line 的交叉尺寸会取
+       「最宽子项」而不是容器宽度，.os-scopes 会撑破卡片产生横向溢出（实测 390px 溢出 119px）。
+       .os-input 的 flex-basis 在纵向下会变成高度，故改为不参与 flex 伸缩。 */
+    .os-row { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+    .os-scopes { overflow-x: auto; min-width: 0; max-width: 100%; }
+    .os-input { flex: 0 0 auto; width: 100%; }
+    /* 生成报告：快捷区间换行到日期下方。行组件的「上下两段」拆法已提到上方双列规则里
+       （报告 / 献策两条列表在任何宽度都是两段），此处保留作窄屏兜底。 */
+    .rg-presets { margin-left: 0; }
+    .row-item { flex-wrap: wrap; row-gap: .35rem; }
+    .row-title { width: 100%; }
+    .row-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+    /* 双列列表在手机上走回「徽标 / 标题满行 / 时间+打开」三段：390px 时行宽仅约 256px，
+       标题若仍与徽标同排就只剩约 160px，日期区间会被硬断成「2026.09.2 / 1周报」。
+       此处用 id 选择器盖回上方双列规则里的 flex:1 1 0。 */
+    #advise-list .row-title, #report-list .row-title { flex: 0 0 auto; width: 100%; }
+  }
+
+  /* 双列列表（已生成献策 / 已生成报告）：窄屏退回单列。
+     断点与 theme.css 的侧栏折叠对齐（<992px 侧栏收成 64px 图标栏）——此宽度以下
+     主区放不下两个可读的半幅卡片（半幅会小于 300px）。用 id 选择器覆盖上方基础规则。 */
+  @media (max-width: 991.98px) {
+    #advise-list, #report-list { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div id="office-scope">
+
+  <!-- ⓪ 统一搜索：办公平台页面最前部的检索面板（工具区，不计入下方五个模块的顺序）。
+       一个入口覆盖三类产出物：搜文件（工作文件内容）/ 搜献策（AI 献策）/ 搜报告（日报周报…），
+       也可选「全部」合并检索。它只作用于搜索结果本身，不改动下方任何模块的数据；
+       与「工作文件目录」内的 wfq 是两件事——wfq 是模块级过滤，这里是跨类检索。 -->
+  <section class="office-module" id="office-search">
+    <div class="card shadow-sm">
+      <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-search"></i> 统一搜索
+          <small class="text-muted fw-normal">文件 / 献策 / 报告 —— 可分可合</small>
+        </span>
+        {% if search.active %}
+        <span class="badge bg-primary-subtle text-primary-emphasis">命中 {{ search.scope_total }} 条</span>
+        {% else %}
+        <span class="badge bg-secondary-subtle text-secondary-emphasis">输入关键词开始检索</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <form method="get" action="/office/" class="os-form" data-office-search>
+          {# 统一搜索与「工作文件目录」的筛选表单是两件事，故用不同钩子属性： #}
+          {# data-office-search = 本面板；data-filter-form = 文件目录筛选表单（既有契约，保持唯一） #}
+          {# 两者都走同一套局部刷新，见页面底部 submit 处理器 #}
+          {% if active_cat %}<input type="hidden" name="cat" value="{{ active_cat }}">{% endif %}
+          {% if archive_view %}<input type="hidden" name="rec" value="{{ active_rec }}">{% endif %}
+          {% if wfq %}<input type="hidden" name="wfq" value="{{ wfq }}">{% endif %}
+          <div class="os-row">
+            <div class="os-scopes" role="radiogroup" aria-label="搜索范围">
+              {% for s in search.scopes %}
+              <label class="os-scope{% if s.active %} is-active{% endif %}"
+                     title="{% if s.key == 'all' %}三类产出物合并检索{% else %}只检索{{ s.label|slice:'1:' }}{% endif %}">
+                <input type="radio" name="oscope" value="{{ s.key }}" {% if s.active %}checked{% endif %}>
+                <i class="bi bi-{{ s.icon }}"></i>
+                <span>{{ s.label }}</span>
+                <span class="os-scope-count">{{ s.count }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="os-input">
+              <input type="text" name="osq" class="form-control form-control-sm" value="{{ search.q }}"
+                     placeholder="关键词：文件名 / 文件内容 / 献策主题 / 报告正文（如「月报」）">
+              <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-search"></i> 搜索</button>
+              {% if search.active %}
+              <a href="{{ clear_search_url }}" class="btn btn-sm btn-link text-nowrap" data-filter-link>清除</a>
+              {% endif %}
+            </div>
+          </div>
+          <p class="os-hint mb-0">
+            <i class="bi bi-info-circle"></i>
+            切换左侧范围可只搜一类，选「全部」则三类合并（结果分组展示）。
+            报告与献策的正文、文件名都在检索范围内；工作文件按文件名与提取内容匹配。
+          </p>
+        </form>
+
+        {% if search.active %}
+        <div class="os-results">
+          {% for g in search.groups %}{% if g.items %}
+          <div class="os-group">
+            <div class="os-group-head">
+              <span class="os-group-name"><i class="bi bi-{{ g.icon }}"></i> {{ g.label }}
+                <span class="text-muted fw-normal">（{{ g.count }} 条{% if g.more %}，仅列前 {{ g.limit }} 条{% endif %}）</span>
+              </span>
+              {% if g.key == 'file' %}<a class="os-jump" href="#workfiles">到「工作文件目录」↓</a>
+              {% elif g.key == 'advise' %}<a class="os-jump" href="#ai-advise">到「AI 智能献策」↓</a>
+              {% else %}<a class="os-jump" href="#report-form">到「生成报告」↓</a>{% endif %}
+            </div>
+            <div class="os-items">
+              {% for it in g.items %}
+              <a href="{{ it.url }}" class="os-item">
+                <span class="os-item-title">{{ it.title }}</span>
+                {% if it.snippet %}<span class="os-item-snippet">{{ it.snippet|safe }}</span>{% endif %}
+                <span class="os-item-meta">{{ it.meta }}</span>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}{% endfor %}
+
+          {% if not search.shown %}
+          <div class="os-empty text-muted small">
+            没有匹配「{{ search.q }}」的结果。
+            {% if search.scope != 'all' %}
+            当前只搜了「{{ search.scope_label }}」，其余范围共 {{ search.total }} 条 ——
+            可改选「全部」跨三类合并检索，或
+            <a href="{{ clear_search_url }}" data-filter-link>清除搜索</a>后重试。
+            {% else %}
+            试试更短的关键词，或换个说法。
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- ① 工作记录（记录工作事宜表单 + 按天记录列表，同属一个模块） -->
+  <section class="office-module is-active" data-office-panel="records">
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="card shadow-sm mb-3">
+          <div class="card-header bg-transparent fw-semibold">记录工作事宜</div>
+          <div class="card-body">
+            <form method="post" action="/office/work_add/" class="row g-2 align-items-stretch">
+              {% csrf_token %}
+              {% if archive_view %}<input type="hidden" name="rec" value="{{ active_rec }}">{% endif %}
+              {% if wfq %}<input type="hidden" name="wfq" value="{{ wfq }}">{% endif %}
+              <!-- 左侧：分类（上） + 状态（下） -->
+              <div class="col-lg-3 d-flex flex-column gap-2">
+                <select name="category" class="form-select form-select-sm" title="新建记录的分类">
+                  {% for k,l in cats.items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}
+                </select>
+                <input name="status" class="form-control form-control-sm" placeholder="状态（可选）">
+              </div>
+              <!-- 右侧：大输入框 + 记录按钮 -->
+              <div class="col-lg-9 d-flex flex-column gap-2">
+                <textarea name="content" class="form-control" rows="3" placeholder="今天做了什么 / 待办…" required></textarea>
+                <button class="btn btn-primary btn-sm align-self-start"><i class="bi bi-plus-lg"></i> 记录</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card shadow-sm" id="work-records">
+          <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="d-flex align-items-center flex-wrap gap-2">
+              <span>工作记录 <small class="text-muted fw-normal">（按天 · {{ record_shown }} 条{% if archive_view %} · 已归档{% else %}，不含归档{% endif %}）</small></span>
+              {# 归档视图的唯一入口：紧跟「工作记录」标题；只切换本区内容，与分类 / 关键词筛选互不影响 #}
+              {% if archive_view %}
+              <a href="{{ archive_exit_url }}"
+                 class="btn btn-sm btn-primary py-0" data-filter-link
+                 title="当前是归档视图，点击退出（文件目录的分类与关键词保持不变）">
+                <i class="bi bi-archive"></i> 归档的{{ archive_label }} {{ archive_count }} 条
+              </a>
+              {% else %}
+              <a href="{{ archive_enter_url }}"
+                 class="btn btn-sm btn-outline-secondary py-0" data-filter-link
+                 title="只看已归档的工作记录；只切换本区内容，不影响工作文件目录的分类与关键词">
+                <i class="bi bi-archive"></i> 归档的{{ archive_label }} {{ archive_count }} 条
+              </a>
+              {% endif %}
+            </span>
+            <small class="text-muted fw-normal"><i class="bi bi-hand-index"></i> 点击 日期 / 状态 / 类型 可直接修改</small>
+          </div>
+          <div class="card-body pt-3">
+            <div class="wr-grid">
+            {% for g in day_groups %}
+            <div class="wr-day">
+              <div class="wr-day-head">
+                <span class="wr-day-date"><i class="bi bi-calendar3 text-primary"></i> {{ g.full }}</span>
+                {% if g.is_today %}<span class="badge bg-primary-subtle text-primary-emphasis">今天</span>{% endif %}
+                <span class="text-muted small">{{ g.weekday }}</span>
+                {% if g.can_archive %}
+                <button type="button" class="wr-arch" data-day="{{ g.full }}" data-count="{{ g.items|length }}"
+                        title="把本日记录归档到「{{ archive_label }}」分类"><i class="bi bi-archive"></i> 归档</button>
+                {% endif %}
+                <span class="wr-count wr-day-count ms-auto">{{ g.items|length }} 条</span>
+              </div>
+              <ul class="wr-list">
+                {% for r in g.items %}
+                <li class="wr-item" data-daycount-host>
+                  <div class="wr-main">
+                    <span class="wr-content">
+                      <span class="wr-check-label">
+                        <input type="checkbox" class="wr-check" data-id="{{ r.pk }}" {% if r.status == '已完成' %}checked{% endif %} title="勾选标记为「已完成」">
+                      </span>
+                      <span class="wr-text">{{ r.content }}</span>
+                    </span>
+                    <span class="wr-meta small">
+                      <span class="wr-edit wr-cat" data-id="{{ r.pk }}" data-field="category" data-value="{{ r.category }}" title="点击修改类型">{{ r.get_category_display }}</span>
+                      <span class="wr-edit {% if r.status == '已完成' %}wr-status-success{% elif r.status == '待定' %}wr-status-warning{% elif r.status == '进行中' %}wr-status{% else %}wr-status wr-status-empty{% endif %}" data-id="{{ r.pk }}" data-field="status" data-value="{{ r.status }}" title="点击修改状态">{{ r.status|default:'状态…' }}</span>
+                      <span class="wr-edit wr-date" data-id="{{ r.pk }}" data-field="date" data-value="{{ r.date|date:'Y-m-d' }}" title="点击修改日期">{{ r.date|date:'Y-m-d' }}</span>
+                      <button class="wr-del" data-id="{{ r.pk }}" title="删除此记录"><i class="bi bi-trash"></i></button>
+                    </span>
+                  </div>
+                </li>
+                {% empty %}{% endfor %}
+              </ul>
+            </div>
+            {% empty %}
+            <div class="text-muted small">{% if archive_view %}还没有已归档的工作记录。{% else %}暂无记录。{% endif %}</div>
+            {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② AI 智能献策 -->
+  <section class="office-module" id="ai-advise" data-office-panel="advise">
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-stars"></i> AI 智能献策
+              <small class="text-muted fw-normal">基于知识库与你的风格；未配置 Key 时本地汇总</small>
+            </span>
+            <span class="badge bg-primary-subtle text-primary-emphasis">已生成 {{ advise_count }} 条</span>
+          </div>
+          <div class="card-body">
+            <form method="post" action="/office/advise/" class="row g-2 align-items-end">
+              {% csrf_token %}
+              <div class="col-md-3">
+                <label class="form-label small">工作类别</label>
+                <select name="category" class="form-select form-select-sm" title="献策所属的工作类别">
+                  {% for k,l in cats.items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-md-7">
+                <label class="form-label small">献策主题</label>
+                <input name="topic" class="form-control form-control-sm" placeholder="如：如何提升团队执行力 / 下周党建活动方案…" required>
+              </div>
+              <div class="col-md-2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-stars"></i> 生成献策</button></div>
+            </form>
+
+            {# 献策的「再次找到」入口 1/2：本列表，整行可点；输出后自动打开的详情页也可随时回来 #}
+            <div class="row-head">
+              <h6 class="mb-0 fw-semibold"><i class="bi bi-clock-history"></i> 已生成献策</h6>
+              <span class="small text-muted">整行可点击 · 最新生成的排在最前</span>
+            </div>
+            <div class="row-list" id="advise-list">
+              {% for adv in advises %}
+              <a href="/office/advise/{{ adv.pk }}/" class="row-item" title="打开「{{ adv.title }}」">
+                <span class="row-kind row-kind--advise">{{ adv.get_category_display }}</span>
+                <span class="row-title">{{ adv.title }}</span>
+                <span class="row-meta">
+                  <span class="row-when">
+                    <i class="bi bi-clock"></i> 生成于 {{ adv.created|date:'Y.m.d H:i' }}
+                    {% if adv.file_path %}<i class="bi bi-file-earmark-check text-success ms-1" title="已输出为 Markdown 文件"></i>{% endif %}
+                  </span>
+                  <span class="row-open">打开 <i class="bi bi-chevron-right"></i></span>
+                </span>
+              </a>
+              {% empty %}
+              <div class="row-empty text-muted small">还没有献策。填好主题点「生成献策」，生成后会落到下面这个目录，并出现在本列表中。</div>
+              {% endfor %}
+            </div>
+            <p class="os-hint mb-0">
+              <i class="bi bi-folder2-open"></i> 献策输出目录：<code>{{ advise_output_root }}\&lt;工作分类&gt;\</code>
+              ，文件名 <code>&lt;日期&gt;_&lt;主题&gt;.md</code>；每次生成都会落一条记录 + 一份文件，
+              返回或关闭页面后可从本列表、上方统一搜索、以及磁盘目录三处再次找到。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 生成报告：先选报告区间，再点类型生成；下方为已生成报告列表 -->
+  <section class="office-module" data-office-panel="reports">
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-file-earmark-bar-graph"></i> 生成报告
+              <small class="text-muted fw-normal">基于工作记录，按你的风格生成汇报文档</small>
+            </span>
+            <span class="badge bg-primary-subtle text-primary-emphasis">已生成 {{ report_count }} 份</span>
+          </div>
+          <div class="card-body">
+            <form method="post" action="/office/report_gen/" id="report-form">
+              {% csrf_token %}
+              <!-- 报告区间：可手选起止日期，也可用右侧快捷区间一键填充 -->
+              <div class="rg-range">
+                <div class="rg-range-row">
+                  <div class="rg-field">
+                    <label class="rg-label" for="rg-start">起始日期</label>
+                    <input type="date" id="rg-start" name="start" class="form-control form-control-sm"
+                           value="{{ report_default_start }}">
+                  </div>
+                  <span class="rg-sep">~</span>
+                  <div class="rg-field">
+                    <label class="rg-label" for="rg-end">结束日期</label>
+                    <input type="date" id="rg-end" name="end" class="form-control form-control-sm"
+                           value="{{ report_default_end }}">
+                  </div>
+                  <div class="rg-presets">
+                    <span class="rg-label">快捷区间</span>
+                    <button type="button" class="rg-preset" data-preset="today">今天</button>
+                    <button type="button" class="rg-preset" data-preset="week">本周</button>
+                    <button type="button" class="rg-preset" data-preset="month">本月</button>
+                    <button type="button" class="rg-preset" data-preset="year">本年</button>
+                  </div>
+                </div>
+                <p class="rg-range-note mb-0">
+                  <i class="bi bi-info-circle"></i>
+                  报告只汇总所选区间内的工作记录；<strong>日报</strong>为单日口径（取结束日期），其余类型按整个区间生成。
+                </p>
+              </div>
+
+              <!-- 报告类型：按钮上实时显示「按当前区间将生成的报告名」 -->
+              <div class="rg-types">
+                {% for kc in kind_cards %}
+                <button type="submit" name="kind" value="{{ kc.key }}" class="rg-type rg-type--{{ kc.key }}"
+                        title="{{ kc.hint }} · 按当前报告区间生成{{ kc.label }}">
+                  <span class="rg-type-icon"><i class="bi bi-{{ kc.icon }}"></i></span>
+                  <span class="rg-type-text">
+                    <span class="rg-type-name">生成{{ kc.label }}</span>
+                    <span class="rg-type-preview" data-kind="{{ kc.key }}">{{ kc.hint }}</span>
+                  </span>
+                </button>
+                {% endfor %}
+              </div>
+            </form>
+
+            <div class="row-head">
+              <h6 class="mb-0 fw-semibold"><i class="bi bi-clock-history"></i> 已生成报告</h6>
+              <span class="small text-muted">整行可点击 · 最新生成的排在最前</span>
+            </div>
+            <div class="row-list" id="report-list">
+              {% for rep in reports %}
+              <a href="/office/report/{{ rep.pk }}/" class="row-item" title="打开「{{ rep.title }}」">
+                <span class="row-kind row-kind--{{ rep.kind }}">{{ rep.get_kind_display }}</span>
+                <span class="row-title">{{ rep.title }}</span>
+                <span class="row-meta">
+                  <span class="row-when">
+                    <i class="bi bi-clock"></i> 生成于 {{ rep.created|date:'Y.m.d H:i' }}
+                    {% if rep.file_path %}<i class="bi bi-file-earmark-check text-success ms-1" title="已输出为 Markdown 文件"></i>{% endif %}
+                  </span>
+                  <span class="row-open">打开 <i class="bi bi-chevron-right"></i></span>
+                </span>
+              </a>
+              {% empty %}
+              <div class="row-empty text-muted small">还没有报告。选好区间后点上方任一类型，即可生成第一份。</div>
+              {% endfor %}
+            </div>
+            <p class="os-hint mb-0">
+              <i class="bi bi-folder2-open"></i> 报告输出目录：<code>{{ report_output_root }}\&lt;报告类型&gt;\</code>
+              ，文件名即报告名（如 <code>2026.09.01~2026.09.30月报.md</code>）。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 工作分类标签：卡片即「工作文件目录」的分类筛选入口（**只筛文件，不影响上方工作记录**）；
+       记录区的归档视图不做成卡片，入口在「工作记录」标题旁 -->
+  <div class="row g-3 office-module" id="work-cats" data-office-panel="files">
+    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="small text-muted">
+        <i class="bi bi-funnel"></i> 点击卡片筛选下方<strong>工作文件目录</strong>（不影响上方工作记录）；
+        各分类互斥单选，再点已选中的卡片即取消。<strong>归档视图</strong>的入口在「工作记录」标题旁，
+        只切换工作记录区，与这里的分类筛选互不影响。
+      </span>
+      {% if wf_filters %}
+      <a href="{{ clear_filters_url }}" class="btn btn-sm btn-outline-secondary" data-filter-link><i class="bi bi-x-circle"></i> 清除全部筛选</a>
+      {% endif %}
+    </div>
+    {% for c in cat_cards %}
+    <div class="col-md-4">
+      {% if active_cat == c.key %}
+      <a href="{{ c.exit_url }}"
+         class="cat-card card shadow-sm h-100 text-decoration-none text-reset is-active" data-filter-link
+         title="当前已按「{{ c.label }}」筛选工作文件，点击取消分类筛选（保留关键词）">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <h5 class="card-title mb-2"><i class="bi bi-folder2-open text-primary"></i> {{ c.label }}</h5>
+            <span class="badge bg-primary">筛选中</span>
+          </div>
+          <p class="text-muted small mb-2">{{ c.desc }}</p>
+          <span class="cat-card-meta text-muted mb-2">工作文件 {{ c.files }} 个</span>
+          <span class="cat-card-hint text-primary mt-auto"><i class="bi bi-arrow-counterclockwise"></i> 再次点击取消分类筛选</span>
+        </div>
+      </a>
+      {% else %}
+      <a href="{{ c.enter_url }}"
+         class="cat-card card shadow-sm h-100 text-decoration-none text-reset" data-filter-link
+         title="点击按「{{ c.label }}」筛选工作文件（不影响工作记录）">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title mb-2"><i class="bi bi-folder2-open text-primary"></i> {{ c.label }}</h5>
+          <p class="text-muted small mb-2">{{ c.desc }}</p>
+          <span class="cat-card-meta text-muted mb-2">工作文件 {{ c.files }} 个</span>
+          <span class="cat-card-hint text-primary mt-auto"><i class="bi bi-funnel"></i> 点击筛选本类工作文件</span>
+        </div>
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if wf_filters %}
+    <div class="col-12">
+      <div class="alert alert-primary d-flex flex-wrap align-items-center gap-2 py-2 px-3 small mb-0" role="status" aria-live="polite">
+        <span class="fw-semibold"><i class="bi bi-funnel-fill"></i> 工作文件目录筛选</span>
+        {% for f in wf_filters %}<span class="badge bg-primary">{{ f }}</span>{% endfor %}
+        <span class="text-body-secondary">
+          {% if active_cat and wfq %}两个条件叠加生效：先按分类缩小，再在该分类内按关键词匹配。{% else %}再点同一张卡片可取消分类；关键词可在文件检索框清除。{% endif %}
+        </span>
+        <span class="ms-auto text-nowrap">命中：工作文件 <strong>{{ workfile_total }}</strong> / {{ workfile_all_total }} 个</span>
+        <span class="text-nowrap"><a href="#workfiles">看筛选结果 ↓</a></span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ⑤ 工作文件目录：**分类筛选的唯一作用对象**，只受本区分类卡片 + 关键词检索约束（叠加 AND）；
+       上方「工作记录」区与此处的筛选完全无关，此处也只列工作文件、不列任何记录 -->
+  <section class="office-module" data-office-panel="files">
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="card shadow-sm" id="workfiles">
+          <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-folder2-open"></i> 工作文件目录
+              <small class="text-muted fw-normal">按分类索引，点击查看；仅引用、不改写原件</small>
+              {% if active_cat_label %}<span class="badge bg-primary-subtle text-primary-emphasis ms-1"><i class="bi bi-funnel"></i> 分类：{{ active_cat_label }}</span>{% endif %}
+              {% if wfq %}<span class="badge bg-primary-subtle text-primary-emphasis ms-1"><i class="bi bi-search"></i> 关键词：{{ wfq }}</span>{% endif %}
+            </span>
+            <span class="d-flex align-items-center gap-2">
+              <span class="badge bg-primary-subtle text-primary-emphasis">
+                {% if wf_filtered %}{{ workfile_total }} / {{ workfile_all_total }} 个文件{% else %}{{ workfile_all_total }} 个文件{% endif %}
+              </span>
+            </span>
+          </div>
+          <div class="card-body">
+            <form method="get" action="/office/" class="d-flex gap-2 mb-3 flex-wrap align-items-center" data-filter-form>
+              {% if active_cat %}<input type="hidden" name="cat" value="{{ active_cat }}">{% endif %}
+              {% if archive_view %}<input type="hidden" name="rec" value="{{ active_rec }}">{% endif %}
+              <input type="text" name="wfq" class="form-control form-control-sm" style="max-width:340px;"
+                     placeholder="{% if active_cat_label %}在「{{ active_cat_label }}」内检索文件名 / 内容…{% else %}检索工作文件名 / 内容…{% endif %}"
+                     value="{{ wfq|default:'' }}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i> 检索</button>
+              {% if wfq %}<a href="{{ clear_wfq_url }}" class="btn btn-sm btn-link" data-filter-link>清除关键词（保留分类）</a>{% endif %}
+            </form>
+
+            {% if wf_filtered %}
+            <div class="small text-muted mb-2">
+              <i class="bi bi-funnel"></i> 当前筛选：
+              {% if active_cat_label %}<span class="badge bg-secondary-subtle text-secondary-emphasis">分类：{{ active_cat_label }}</span>{% endif %}
+              {% if wfq %}<span class="badge bg-secondary-subtle text-secondary-emphasis">关键词：{{ wfq }}</span>{% endif %}
+              {% if active_cat and wfq %}<span class="text-body-secondary">（分类 + 关键词叠加）</span>{% endif %}
+              <a href="/office/#workfiles" class="ms-2" data-filter-link>清除全部筛选</a>
+            </div>
+            {% endif %}
+
+            {# 工作文件目录只放工作文件；工作记录一律只在「工作记录」区展示，此处不再重复列出 #}
+            {% for g in workfiles_grouped %}
+            <div class="mb-3">
+              <div class="fw-semibold small mb-2"><i class="bi bi-folder"></i> {{ g.category }} <span class="text-muted">（{{ g.items|length }}）</span></div>
+              <ul class="list-group list-group-flush">
+                {% for wf in g.items %}
+                <a href="/office/workfile/{{ wf.pk }}/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2">
+                  <span class="text-truncate"><i class="bi bi-file-earmark"></i> {{ wf.title }}</span>
+                  <span class="small text-muted text-nowrap">{% if wf.ext %}.{{ wf.ext }}{% endif %} · {{ wf.updated|date:'Y-m-d' }}</span>
+                </a>
+                {% endfor %}
+              </ul>
+            </div>
+            {% empty %}
+            <div class="text-muted small">
+              {% if wf_filtered %}
+                当前筛选下没有匹配的工作文件。
+                <a href="/office/#workfiles" data-filter-link>清除全部筛选</a>
+              {% else %}
+                还没有工作文件。请到「知识收集 → 本地导入」选择文件，点「存入办公平台」并选择工作分类即可归入此处。
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /#office-scope -->
+
+<script>
+/* 办公中心只展示当前任务工作区，减少长页面堆叠。 */
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-office-tab]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[data-office-panel]'));
+  function activate(name, updateHash) {
+    if (!tabs.some(function (t) { return t.dataset.officeTab === name; })) name = 'records';
+    tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.officeTab === name); });
+    panels.forEach(function (p) { p.classList.toggle('is-active', p.dataset.officePanel === name); });
+    if (updateHash && history.replaceState) history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.officeTab, true); }); });
+  var params = new URLSearchParams(location.search);
+  var fromHash = location.hash.replace('#', '');
+  var initial = params.has('cat') || params.has('wfq') ? 'files' : fromHash;
+  if (fromHash === 'ai-advise') initial = 'advise';
+  if (fromHash === 'report-form') initial = 'reports';
+  if (fromHash === 'workfiles' || fromHash === 'work-cats') initial = 'files';
+  activate(initial || 'records', false);
+  document.querySelectorAll('.os-jump').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var target = (link.getAttribute('href') || '').replace('#', '');
+      activate(target === 'ai-advise' ? 'advise' : target === 'report-form' ? 'reports' : 'files', false);
+    });
+  });
+})();
+
+/* 工作记录内联编辑。抽成具名函数，便于筛选局部刷新后重新绑定新 DOM。 */
+window.__officeInitRecords = function () {
+  var STATUS_OPTS = [{% for s in status_opts %}'{{ s }}',{% endfor %}];
+  var CATS = [{% for k,l in cats.items %}['{{ k }}', '{{ l }}'],{% endfor %}];
+  function statusClass(v) {
+    if (!v) return 'wr-status wr-status-empty';
+    if (v === '已完成') return 'wr-status-success';
+    if (v === '待定') return 'wr-status-warning';
+    return 'wr-status';
+  }
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : '';
+  }
+  function save(id, field, value, cell, done) {
+    fetch('/office/api/record_update/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ id: id, field: field, value: value })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { alert('修改失败：' + (d.error || '未知错误')); done(null); return; }
+        done(d);
+      })
+      .catch(function () { alert('网络错误'); done(null); });
+  }
+  function startEdit(cell) {
+    if (cell.querySelector('input,select')) return;
+    var field = cell.dataset.field, id = cell.dataset.id, old = cell.dataset.value || '';
+    var orig = cell.innerHTML;
+    var editor;
+    if (field === 'category') {
+      editor = document.createElement('select');
+      editor.className = 'wr-edit-input form-select form-select-sm d-inline-block w-auto';
+      CATS.forEach(function (p) {
+        var o = document.createElement('option');
+        o.value = p[0]; o.textContent = p[1];
+        if (p[0] === old) o.selected = true;
+        editor.appendChild(o);
+      });
+    } else if (field === 'date') {
+      editor = document.createElement('input');
+      editor.type = 'date';
+      editor.value = old;
+      editor.className = 'wr-edit-input';
+    } else { // status：下拉选择（仅 进行中 / 待定 / 已完成 三种；未设置时不预选任何项）
+      editor = document.createElement('select');
+      editor.className = 'wr-edit-input form-select form-select-sm d-inline-block w-auto';
+      STATUS_OPTS.forEach(function (s) {
+        var o = document.createElement('option');
+        o.value = s; o.textContent = s;
+        if (s === old) o.selected = true;
+        editor.appendChild(o);
+      });
+      if (STATUS_OPTS.indexOf(old) < 0) editor.selectedIndex = -1; // 未设置或非三态旧值 → 留空，不预选
+    }
+    cell.innerHTML = '';
+    cell.appendChild(editor);
+    editor.focus();
+    var closed = false;
+    function commit() {
+      if (closed) return;
+      closed = true;
+      var v = editor.value;
+      // 状态：未选中任何一项而原本有值（自定义旧值）→ 视为取消，不落库，避免静默改写
+      if (field === 'status' && v === '' && old !== '') { cell.innerHTML = orig; return; }
+      save(id, field, v, cell, function (d) {
+        if (!d) { cell.innerHTML = orig; return; }
+        if (field === 'category') {
+          cell.textContent = d.category_display;
+          cell.dataset.value = d.category;
+        } else if (field === 'status') {
+          cell.textContent = d.status || '状态…';
+          cell.dataset.value = d.status;
+          cell.className = 'wr-edit ' + statusClass(d.status);
+        } else {
+          location.reload(); // 日期变更：记录跨天分组移动，整页刷新
+          return;
+        }
+        cell.innerHTML = cell.textContent; // textContent 写回，保留样式类
+      });
+    }
+    function cancel() {
+      if (closed) return;
+      closed = true;
+      cell.innerHTML = orig;
+    }
+    editor.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    editor.addEventListener('blur', commit);
+  }
+  document.querySelectorAll('.wr-edit').forEach(function (cell) {
+    cell.addEventListener('click', function () { startEdit(cell); });
+  });
+
+  // 勾选框：勾选 → 状态置「已完成」；取消 → 置「进行中」
+  function setStatus(id, value, chip, checkbox) {
+    save(id, 'status', value, chip, function (d) {
+      if (!d) { if (checkbox) checkbox.checked = !checkbox.checked; return; }
+      chip.textContent = d.status || '状态…';
+      chip.dataset.value = d.status;
+      chip.className = 'wr-edit ' + statusClass(d.status);
+    });
+  }
+  document.querySelectorAll('.wr-check').forEach(function (box) {
+    box.addEventListener('change', function () {
+      var chip = this.closest('.wr-main').querySelector('.wr-edit[data-field="status"]');
+      setStatus(this.dataset.id, this.checked ? '已完成' : '进行中', chip, this);
+    });
+  });
+
+  // 删除：确认后调用删除接口，移除 DOM 并递减当日条数，空日则移除日容器
+  function postDelete(id) {
+    fetch('/office/api/record_delete/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ id: id })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { alert('删除失败：' + (d.error || '未知错误')); return; }
+        var li = document.querySelector('.wr-item .wr-check[data-id="' + id + '"]');
+        if (li) li = li.closest('.wr-item');
+        if (!li) return;
+        var day = li.closest('.wr-day');
+        li.remove();
+        var counter = day.querySelector('.wr-count');
+        var n = day.querySelectorAll('.wr-item').length;
+        if (counter) counter.textContent = n + ' 条';
+        if (n === 0) day.remove();
+      })
+      .catch(function () { alert('网络错误'); });
+  }
+  document.querySelectorAll('.wr-del').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (confirm('确定删除这条工作记录？')) postDelete(this.dataset.id);
+    });
+  });
+
+  // 日期卡片「归档」：把本日记录移入「工作记录」归档分类（默认列表不再展示）
+  document.querySelectorAll('.wr-arch').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var day = this.dataset.day, n = this.dataset.count || '';
+      if (!confirm('把 ' + day + ' 的 ' + n + ' 条记录归档到「{{ archive_label }}」分类？\n'
+        + '归档后不再显示在本列表中，可点「工作记录」标题旁的「归档的工作记录」按钮查看。')) return;
+      var self = this;
+      self.disabled = true;
+      fetch('/office/api/archive_day/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ date: day })   // 归档范围 = 本日卡片上的全部记录，与分类筛选无关
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) { alert('归档失败：' + (d.error || '未知错误')); self.disabled = false; return; }
+          // 归档后整块局部刷新（与筛选同一套流程）；异常时退回整页刷新
+          if (window.__officeReload) { window.__officeReload(); } else { location.reload(); }
+        })
+        .catch(function () { alert('网络错误'); self.disabled = false; });
+    });
+  });
+};
+window.__officeInitRecords();
+
+/* 生成报告：快捷区间一键填充 + 按当前区间实时预览「将生成的报告名」。
+   命名规则与后端 Report.title 完全一致：
+   日报 = 结束日期（单日）+「日报」；其余 = 起始~结束 + 类型标签。
+   局部刷新会整块替换 #office-scope，故同样抽成具名函数供刷新后重新绑定。 */
+window.__officeInitReport = function () {
+  var form = document.getElementById('report-form');
+  if (!form) return;
+  var startEl = form.querySelector('input[name="start"]');
+  var endEl = form.querySelector('input[name="end"]');
+  if (!startEl || !endEl) return;
+  var LABELS = { {% for k,l in kinds.items %}'{{ k }}': '{{ l }}'{% if not forloop.last %}, {% endif %}{% endfor %} };
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var iso = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var dot = function (s) { return s ? s.replace(/-/g, '.') : ''; };
+
+  function preview(kind) {
+    var s = startEl.value, e = endEl.value;
+    if (!s && !e) return '未选区间 → 生成时用默认区间';
+    if (!s) s = e;
+    if (!e) e = s;
+    if (s > e) { var t = s; s = e; e = t; }
+    if (kind === 'daily') return dot(e) + (LABELS[kind] || '');
+    return dot(s) + '~' + dot(e) + (LABELS[kind] || '');
+  }
+  function refresh() {
+    form.querySelectorAll('.rg-type-preview').forEach(function (el) {
+      el.textContent = preview(el.dataset.kind);
+    });
+  }
+  ['input', 'change'].forEach(function (ev) {
+    startEl.addEventListener(ev, refresh);
+    endEl.addEventListener(ev, refresh);
+  });
+
+  // 快捷区间：今天 / 本周（周一 ~ 今天）/ 本月 / 本年
+  form.querySelectorAll('.rg-preset').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var today = new Date();
+      var s = new Date(today);
+      var e = new Date(today);
+      var preset = btn.dataset.preset;
+      if (preset === 'week') s.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+      if (preset === 'month') s = new Date(today.getFullYear(), today.getMonth(), 1);
+      if (preset === 'year') s = new Date(today.getFullYear(), 0, 1);
+      startEl.value = iso(s);
+      endEl.value = iso(e);
+      refresh();
+    });
+  });
+  refresh();
+};
+window.__officeInitReport();
+
+/* 统一搜索：范围（全部 / 搜文件 / 搜献策 / 搜报告）做成单选按钮组，
+   切换即提交——省掉「选范围 → 再点搜索」两步。提交交给外层 #office-scope 的
+   data-office-search 处理器走同一套局部刷新，不重复实现请求逻辑。 */
+window.__officeInitSearch = function () {
+  var form = document.querySelector('#office-search form[data-office-search]');
+  if (!form) return;
+  function submitForm() {
+    // requestSubmit 会派发 submit 事件（被外层监听），form.submit() 不会
+    if (form.requestSubmit) { form.requestSubmit(); return; }
+    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  }
+  form.querySelectorAll('input[name="oscope"]').forEach(function (radio) {
+    radio.addEventListener('change', submitForm);
+  });
+};
+window.__officeInitSearch();
+
+/* 局部刷新：统一搜索 / 分类卡片 / 关键词检索 / 清除入口 / 归档视图切换均走同一套
+   「取新版页面 → 替换 #office-scope」流程，不做整页跳转、不重复实现筛选逻辑。
+   各入口的作用范围由服务端决定：统一搜索只改搜索结果，分类 / 关键词只改工作文件目录，
+   归档视图只改工作记录。无 JS 或请求失败时退回 <a href> 普通导航。 */
+(function () {
+  var scope = document.getElementById('office-scope');
+  if (!scope || !window.fetch || !window.DOMParser) return;
+
+  // 闪烁提示只标「本次真正被改动的区块」：统一搜索 → 搜索面板；
+  // 归档视图切换 → 工作记录；分类 / 关键词筛选 → 卡片选中态 + 工作文件目录。
+  function flash(anchor) {
+    var ids = anchor === 'work-records' ? ['work-records']
+      : (anchor === 'office-search' ? ['office-search'] : ['work-cats', 'workfiles']);
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('office-flash');
+      void el.offsetWidth;
+      el.classList.add('office-flash');
+      window.setTimeout(function () { el.classList.remove('office-flash'); }, 1250);
+    });
+  }
+
+  function apply(html, url, push) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var fresh = doc.getElementById('office-scope');
+    if (!fresh) { window.location.href = url; return; }
+    scope.innerHTML = fresh.innerHTML;          // 整块替换，避免页内多处状态不同步
+    if (push) window.history.pushState({ officeScope: 1 }, '', url);
+    if (window.__officeInitRecords) window.__officeInitRecords();  // 重新绑定记录交互
+    if (window.__officeInitReport) window.__officeInitReport();    // 重新绑定报告区（快捷区间 / 名称预览）
+    if (window.__officeInitSearch) window.__officeInitSearch();    // 重新绑定统一搜索（范围切换即搜）
+    flash(url.split('#')[1] || '');
+  }
+
+  function load(url, push) {
+    scope.classList.add('is-loading');
+    window.fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+      .then(function (html) { scope.classList.remove('is-loading'); apply(html, url, push); })
+      .catch(function () { scope.classList.remove('is-loading'); window.location.href = url; });
+  }
+
+  scope.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[data-filter-link]') : null;
+    if (!a) return;
+    e.preventDefault();
+    load(a.getAttribute('href'), true);
+  });
+
+  scope.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.hasAttribute) return;
+    // data-filter-form = 「工作文件目录」的筛选表单；data-office-search = 「统一搜索」面板。
+    // 两者语义不同但共用同一套局部刷新，故在此一并接管。
+    if (!form.hasAttribute('data-filter-form') && !form.hasAttribute('data-office-search')) return;
+    e.preventDefault();
+    var qs = new URLSearchParams(new FormData(form)).toString();
+    load(form.getAttribute('action') + (qs ? '?' + qs : ''), true);
+  });
+
+  // 供记录区「归档」等操作复用同一套局部刷新（不做整页跳转，也不重复实现刷新逻辑）
+  window.__officeReload = function () {
+    load(window.location.pathname + window.location.search, false);
+  };
+
+  window.addEventListener('popstate', function () {
+    load(window.location.pathname + window.location.search, false);
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,1199 @@
+/* Knowledge Platform v1 - Left-sidebar layout + light/dark theme */
+
+:root {
+  --kb-bg: #f7f8fa;
+  --kb-surface: #ffffff;
+  --kb-text: #18212f;
+  --kb-muted: #687386;
+  --kb-border: #e6e9ee;
+  --kb-primary: #1769e0;
+  --kb-primary-hover: #0e56bd;
+  --kb-sidebar-width: 220px;
+  --kb-sidebar-collapsed: 64px;
+  --kb-radius: 8px;
+  --kb-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  /* 全局顶栏高度：与侧栏品牌区同高（64px），顶栏底边与侧栏分隔线连成一条水平线 */
+  --kb-topbar-h: 64px;
+  /* 页面左右内边距：全局顶栏与正文容器共用同一令牌，两者左右边缘因此在任意视口下严格对齐 */
+  --kb-gutter: 32px;
+  /* 批注台（阅读页右侧「阅读笔记 / 金句 / 反向链接 / 出链」）专用配色：
+     用独立底纹把它与白色正文卡区分成两个平面，并保证辅助文案在底纹上的可读对比 */
+  --kb-note-surface: #f2f6ff;
+  --kb-note-accent: #2563eb;
+  --kb-note-border: #dbe4f5;
+  --kb-note-head: #1e3a8a;
+  --kb-note-muted: #4b5563;
+  /* 阅读页版式令牌：正文、标题、批注台共用同一套度量。
+     所有阅读类页面（WiKI 节点 / 书架 / 献策 / 报告）都从这里取值，
+     改版式只改这一处 —— 这就是「所有文章共用一套设计」的落点。 */
+  --kb-read-size: 15.5px;       /* 正文字号 */
+  --kb-read-line: 1.78;         /* 正文行高 */
+  --kb-read-gap: 1.05em;        /* 段落间距 */
+  --kb-read-head-gap: 1.9em;    /* 标题上间距（大于下间距，形成层级节奏） */
+  --kb-read-block-gap: 1.35em;  /* 块级元素（表格/代码块/引用/图）间距 */
+  --kb-read-side-w: 344px;      /* 批注台固定宽度 */
+  --kb-read-col-gap: 26px;      /* 正文与批注台的列间距 */
+  --kb-read-shade: rgba(15, 23, 42, .18);  /* 宽表格可横向滚动时的边缘提示色 */
+}
+
+[data-theme="dark"] {
+  --kb-bg: #0f172a;
+  --kb-surface: #1e293b;
+  --kb-text: #e2e8f0;
+  --kb-muted: #94a3b8;
+  --kb-border: #334155;
+  --kb-primary: #3b82f6;
+  --kb-primary-hover: #60a5fa;
+  --kb-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.18);
+  --kb-note-surface: #1b2537;
+  --kb-note-accent: #60a5fa;
+  --kb-note-border: #2f3b52;
+  --kb-note-head: #bfdbfe;
+  --kb-note-muted: #cbd5e1;
+  --kb-read-shade: rgba(0, 0, 0, .55);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--kb-bg);
+  color: var(--kb-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  display: flex;
+}
+
+a { color: var(--kb-primary); text-decoration: none; }
+a:hover { color: var(--kb-primary-hover); }
+
+/* Sidebar */
+.kb-sidebar {
+  width: var(--kb-sidebar-width);
+  min-height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--kb-surface);
+  border-right: 1px solid var(--kb-border);
+  box-shadow: var(--kb-shadow);
+  display: flex;
+  flex-direction: column;
+  z-index: 1040;
+  transition: width 0.25s ease;
+}
+
+.kb-sidebar-brand {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--kb-border);
+  font-weight: 700;
+  color: var(--kb-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.kb-brand-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--kb-primary);
+  flex: none;
+}
+.kb-brand-mark i { font-size: 1rem; }
+.kb-brand-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.kb-brand-copy strong { font-size: .98rem; color: var(--kb-text); overflow: hidden; text-overflow: ellipsis; }
+.kb-brand-copy small { margin-top: 4px; color: var(--kb-muted); font-size: .67rem; font-weight: 500; }
+.kb-sidebar-close { display: none; margin-left: auto; border: 0; background: transparent; color: var(--kb-muted); font-size: 1.2rem; }
+
+.kb-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 10px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-nav-group-label {
+  padding: 15px 12px 6px;
+  color: #9aa3b2;
+  font-size: .65rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.kb-nav-group-label:first-child { padding-top: 6px; }
+
+.kb-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: var(--kb-radius);
+  color: var(--kb-muted);
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.kb-nav-item i {
+  font-size: 1.25rem;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.kb-nav-item:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--kb-primary);
+}
+
+.kb-nav-item.active {
+  background: rgba(23, 105, 224, 0.10);
+  color: var(--kb-primary);
+  font-weight: 600;
+}
+.kb-nav-item.active::before {
+  content: '';
+  width: 3px;
+  height: 20px;
+  margin-left: -12px;
+  border-radius: 0 3px 3px 0;
+  background: var(--kb-primary);
+}
+.kb-nav-item.active i { margin-left: -5px; }
+
+.kb-sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--kb-border);
+}
+
+.kb-theme-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--kb-border);
+  border-radius: var(--kb-radius);
+  background: transparent;
+  color: var(--kb-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kb-theme-toggle:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--kb-primary);
+  border-color: var(--kb-primary);
+}
+
+.kb-theme-toggle i { font-size: 1.25rem; }
+
+/* Main content */
+.kb-main {
+  margin-left: var(--kb-sidebar-width);
+  flex: 1;
+  /* 关键：flex item 默认 min-width:auto，会被内部超宽内容（宽表格、长串、大图）
+     撑宽，表现为「整个页面出现横向滚动条」。置 0 后主容器可正常收缩，
+     超宽内容只能在各自的局部滚动容器里消化。 */
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.25s ease;
+}
+
+/* 全局顶栏（全网检索常驻入口）：吸顶固定，所有页面可见。
+   - 高度 = --kb-topbar-h（64px，与侧栏品牌区等高）→ 顶栏底边与侧栏分隔线连成一条水平线；
+   - flex: 0 0 auto → 顶栏不被正文撑高后的 .kb-main 弹性列挤压（窄屏换行时曾被压到 min-height
+     下限 53px，而换行后内容需要 85px，检索框因此溢出顶栏底边 24px）；
+   - 左右内边距移交 .kb-topbar-inner，并与正文容器同宽（1440）同令牌（--kb-gutter），
+     所以顶栏标题左边缘 == 正文卡片左边缘、顶栏右端 == 正文卡片右端。 */
+.kb-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-height: var(--kb-topbar-h);
+  padding: 8px 0;
+  background: var(--kb-surface);
+  border-bottom: 1px solid var(--kb-border);
+  box-shadow: none;
+}
+
+.kb-topbar-inner {
+  width: 100%;
+  max-width: 1280px;
+  padding: 0 var(--kb-gutter);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.kb-menu-toggle {
+  display: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--kb-border);
+  border-radius: 8px;
+  background: var(--kb-surface);
+  color: var(--kb-text);
+  font-size: 1.25rem;
+  flex: none;
+}
+
+.kb-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--kb-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.kb-topbar-title i { color: var(--kb-primary); font-size: 1.15rem; }
+
+/* 检索框：flex 自适应 + 上限 620px；margin:0 auto 把两侧剩余空白**均分**，
+   避免空白全挤在检索框右侧（曾出现 form 两侧留白 14 / 683 的极端不对称）。 */
+.kb-global-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+/* 放大镜：left:12px + 图标宽 14px + 输入框左内边距 38px → 图标左右各留 12px，与文字起点对称 */
+.kb-global-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--kb-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+/* Bootstrap .form-control 自带 width:100%，在 flex 行里会把自己的 basis 撑满、
+   把按钮挤到换行（「检索全网」曾显示成上下两行）。输入框改为可收缩、按钮禁止换行。 */
+.kb-global-search input.form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 38px;
+  background: var(--kb-bg);
+  border-color: var(--kb-border);
+  color: var(--kb-text);
+}
+
+.kb-global-search input.form-control:focus {
+  background: var(--kb-surface);
+  border-color: var(--kb-primary);
+  box-shadow: 0 0 0 0.18rem rgba(37, 99, 235, 0.18);
+}
+
+.kb-global-search .btn { white-space: nowrap; flex-shrink: 0; }
+
+/* 右侧操作提示：次要信息，贴右对齐并加宽度上限，避免长文案把视觉重心拽向右端
+   （不用 margin-left:auto——那会与检索框的 auto 外边距抢剩余空白，破坏两侧均分） */
+.kb-topbar-hint {
+  flex: 0 0 auto;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: 0.76rem;
+  color: var(--kb-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 991px) {
+  .kb-topbar-hint { display: none; }
+  .kb-topbar-inner { gap: 12px; }
+  /* 提示隐藏后右侧元素没了，检索框若仍居中，左侧会多出一个 gap 的空白（实测 84/72）。
+     改为填满可用宽度：左右内边距同为 --kb-gutter，严格对称，也不留空洞 */
+  .kb-global-search { max-width: none; }
+}
+
+@media (max-width: 575px) {
+  :root { --kb-gutter: 18px; }
+  /* 窄屏：标题文字与按钮文案重复（按钮已写明「检索全网」），且若换行成两行，
+     检索框就不再相对顶栏垂直居中（实测上下留白 42/9）。故隐藏标题、检索框单行
+     占满整行 —— 省下一行垂直空间，且左右内边距同为 --kb-gutter、严格对称 */
+  .kb-topbar-title { display: none; }
+  .kb-global-search { max-width: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   全局聚合检索：顶栏「范围」下拉 + 结果页分组与出处徽标
+--------------------------------------------------------------------------- */
+.kb-scope-dd { flex: 0 0 auto; }
+.kb-scope-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  white-space: nowrap;
+}
+.kb-scope-btn-label { font-size: .82rem; }
+.kb-scope-menu { min-width: 190px; }
+.kb-scope-head {
+  padding: 0 .5rem .35rem;
+  border-bottom: 1px dashed var(--kb-border);
+  margin-bottom: .3rem;
+}
+.kb-scope-opt {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .32rem .5rem;
+  margin: 0;
+  border-radius: .35rem;
+  font-size: .875rem;
+  cursor: pointer;
+}
+.kb-scope-opt:hover { background: var(--bs-tertiary-bg, #f8f9fa); }
+.kb-scope-opt input { flex: 0 0 auto; margin: 0; }
+.kb-scope-opt i { color: var(--kb-muted); font-size: .85rem; }
+
+/* 结果页：范围分组 + 出处徽标 */
+.kb-scope-section { margin-bottom: 1.6rem; }
+.kb-scope-sec-head {
+  padding-bottom: .45rem;
+  border-bottom: 1px solid var(--kb-border);
+  margin-bottom: .9rem;
+}
+.kb-scope-sec-head i { color: var(--kb-primary); }
+.kb-scope-sub { margin-bottom: 1rem; }
+.kb-src-badge {
+  background: var(--bs-secondary-bg, #e9ecef);
+  color: var(--bs-secondary-color, #51585e);
+  font-weight: 500;
+  margin-right: .35rem;
+}
+@media (max-width: 575px) {
+  /* 窄屏：范围按钮只留图标，保证检索框单行不溢出 */
+  .kb-scope-btn-label { display: none; }
+}
+
+/* 正文容器：与全局顶栏共用 --kb-gutter（32 / ≤575px 时 18），
+   顶栏标题左边缘因此与正文卡片左边缘始终重合 */
+.kb-main-inner {
+  flex: 1;
+  padding: 28px var(--kb-gutter);
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.kb-footer {
+  padding: 16px 32px;
+  text-align: center;
+  color: var(--kb-muted);
+  border-top: 1px solid var(--kb-border);
+}
+
+/* Cards & buttons */
+.card {
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  box-shadow: var(--kb-shadow);
+  border-radius: var(--kb-radius);
+}
+
+.kb-stat-card { border: none; }
+.kb-stat-card .card-body { color: #fff; }
+
+.btn-outline-primary {
+  border-color: var(--kb-primary);
+  color: var(--kb-primary);
+}
+.btn-outline-primary:hover {
+  background: var(--kb-primary);
+  color: #fff;
+}
+
+.btn-outline-dark {
+  border-color: var(--kb-border);
+  color: var(--kb-text);
+}
+.btn-outline-dark:hover {
+  background: var(--kb-border);
+  color: var(--kb-text);
+}
+
+/* Dark overrides */
+[data-theme="dark"] .card,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .dropdown-menu,
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+  background: var(--kb-surface);
+  color: var(--kb-text);
+  border-color: var(--kb-border);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+  background: var(--kb-surface);
+  color: var(--kb-text);
+  border-color: var(--kb-primary);
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="dark"] .text-muted { color: var(--kb-muted) !important; }
+[data-theme="dark"] .list-group-item { background: var(--kb-surface); color: var(--kb-text); border-color: var(--kb-border); }
+[data-theme="dark"] .table { --bs-table-bg: transparent; --bs-table-color: var(--kb-text); --bs-table-border-color: var(--kb-border); }
+[data-theme="dark"] .badge.bg-warning { color: #111827; }
+
+/* Tablet: keep a compact icon rail. */
+@media (max-width: 991px) {
+  .kb-sidebar { width: var(--kb-sidebar-collapsed); }
+  .kb-sidebar-brand .kb-brand-copy, .kb-nav-item span, .kb-theme-toggle span, .kb-nav-group-label { display: none; }
+  .kb-sidebar-brand { justify-content: center; padding: 0; }
+  .kb-main { margin-left: var(--kb-sidebar-collapsed); }
+  .kb-nav-item { justify-content: center; padding: 10px; }
+  .kb-nav-item.active::before { position: absolute; left: 0; margin: 0; }
+  .kb-nav-item.active i { margin-left: 0; }
+}
+
+@media (max-width: 575px) {
+  .kb-main-inner { padding: 18px var(--kb-gutter); }
+  .kb-sidebar {
+    width: min(82vw, 290px);
+    transform: translateX(-102%);
+    transition: transform .2s ease;
+    box-shadow: 12px 0 36px rgba(15, 23, 42, .18);
+  }
+  .kb-sidebar.is-open { transform: translateX(0); }
+  .kb-sidebar-brand { justify-content: flex-start; padding: 0 16px; }
+  .kb-sidebar-brand .kb-brand-copy, .kb-nav-item span, .kb-theme-toggle span, .kb-nav-group-label { display: flex; }
+  .kb-nav-item { justify-content: flex-start; padding: 10px 12px; }
+  .kb-nav-item.active i { margin-left: -5px; }
+  .kb-nav-group-label { display: block; }
+  .kb-sidebar-close { display: inline-flex; }
+  .kb-main { margin-left: 0; }
+  .kb-menu-toggle { display: inline-flex; }
+  .kb-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1035;
+    display: block;
+    border: 0;
+    background: rgba(15, 23, 42, .42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  body.kb-nav-open { overflow: hidden; }
+  body.kb-nav-open .kb-sidebar-backdrop { opacity: 1; pointer-events: auto; }
+  .kb-search-submit span { display: none; }
+  .kb-sidebar-backdrop { display: block; }
+}
+
+.kb-sidebar-backdrop { display: none; }
+
+/* ---------------------------------------------------------------------------
+   Workbench UI: clear hierarchy, restrained color, fewer competing cards.
+--------------------------------------------------------------------------- */
+.kb-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.kb-page-head h1 { margin: 4px 0 5px; font-size: 1.7rem; line-height: 1.25; font-weight: 700; letter-spacing: 0; }
+.kb-page-head p { margin: 0; color: var(--kb-muted); font-size: .92rem; }
+.kb-eyebrow { color: var(--kb-primary); font-size: .68rem; line-height: 1; font-weight: 750; letter-spacing: .11em; }
+.kb-action-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 30px; }
+.kb-action-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--kb-border);
+  border-radius: var(--kb-radius);
+  background: var(--kb-surface);
+  color: var(--kb-text);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.kb-action-card:hover { color: var(--kb-text); border-color: rgba(23,105,224,.35); box-shadow: 0 6px 18px rgba(16,24,40,.07); transform: translateY(-1px); }
+.kb-action-card > i { color: #a3acba; }
+.kb-action-icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--kb-primary); background: rgba(23,105,224,.09); font-size: 1.05rem; }
+.kb-action-card strong, .kb-action-card small { display: block; min-width: 0; }
+.kb-action-card strong { margin-bottom: 2px; font-size: .9rem; }
+.kb-action-card small { color: var(--kb-muted); font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-section-head, .kb-panel-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.kb-section-head { margin-bottom: 12px; }
+.kb-section-head h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.kb-section-head p { margin: 2px 0 0; color: var(--kb-muted); font-size: .76rem; }
+.kb-section-date { color: var(--kb-muted); font-size: .75rem; }
+.kb-overview-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(420px, 1.2fr); gap: 16px; margin-bottom: 28px; }
+.kb-metric-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--kb-border); border-radius: var(--kb-radius); background: var(--kb-surface); overflow: hidden; }
+.kb-metric { padding: 18px; color: var(--kb-text); border-right: 1px solid var(--kb-border); border-bottom: 1px solid var(--kb-border); }
+.kb-metric:nth-child(2n) { border-right: 0; }
+.kb-metric:nth-last-child(-n+2) { border-bottom: 0; }
+.kb-metric:hover { color: var(--kb-text); background: rgba(23,105,224,.025); }
+.kb-metric span, .kb-metric small { display: block; color: var(--kb-muted); font-size: .73rem; }
+.kb-metric strong { display: block; margin: 5px 0 2px; color: var(--kb-text); font-size: 1.75rem; line-height: 1; }
+.kb-trend-panel, .kb-clean-panel { border: 1px solid var(--kb-border); border-radius: var(--kb-radius); background: var(--kb-surface); }
+.kb-trend-panel { padding: 15px 18px 10px; }
+.kb-panel-title { min-height: 30px; font-size: .86rem; font-weight: 650; }
+.kb-panel-title a { color: var(--kb-muted); font-size: .72rem; font-weight: 500; }
+.kb-panel-title a:hover { color: var(--kb-primary); }
+.kb-trend-legend { display: flex; align-items: center; gap: 5px; color: var(--kb-muted); font-size: .68rem; font-weight: 500; }
+.kb-trend-legend i { width: 8px; height: 3px; margin-left: 5px; border-radius: 2px; background: var(--kb-primary); }
+.kb-trend-legend i:nth-child(2) { background: #8db8f3; }
+.kb-trend-chart { min-height: 185px; }
+.kb-trend-chart svg { display: block; width: 100%; height: 190px; overflow: visible; }
+.kb-chart-grid line { stroke: var(--kb-border); stroke-width: 1; }
+.kb-chart-bars rect { fill: rgba(23,105,224,.24); }
+.kb-chart-line { fill: none; stroke: var(--kb-primary); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.kb-chart-labels text { fill: var(--kb-muted); font-size: 10px; }
+.kb-recent-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.kb-clean-panel { padding: 14px 18px; min-width: 0; }
+.kb-recent-list, .kb-activity-list { margin-top: 8px; }
+.kb-recent-item { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 0; color: var(--kb-text); border-top: 1px solid var(--kb-border); }
+.kb-recent-item:hover { color: var(--kb-primary); }
+.kb-recent-item > i { color: #a3acba; font-size: .75rem; }
+.kb-recent-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; color: var(--kb-primary); background: rgba(23,105,224,.07); }
+.kb-recent-item strong, .kb-recent-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-recent-item strong { font-size: .82rem; }
+.kb-recent-item small { margin-top: 2px; color: var(--kb-muted); font-size: .69rem; }
+.kb-activity-item { display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--kb-border); }
+.kb-activity-dot { width: 6px; height: 6px; border-radius: 50%; background: #8db8f3; }
+.kb-activity-item strong, .kb-activity-item small { display: block; }
+.kb-activity-item strong { font-size: .76rem; }
+.kb-activity-item small, .kb-activity-item time { color: var(--kb-muted); font-size: .68rem; }
+.kb-activity-item small { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-empty-state { min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--kb-muted); font-size: .8rem; }
+.kb-empty-state i { font-size: 1.5rem; color: #b4bdca; }
+.kb-empty-state a { font-size: .75rem; }
+
+@media (max-width: 900px) {
+  .kb-action-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .kb-overview-grid, .kb-recent-grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 575px) {
+  .kb-page-head { align-items: flex-start; margin-bottom: 18px; }
+  .kb-page-head h1 { font-size: 1.4rem; }
+  .kb-page-head p, .kb-page-head .kb-eyebrow { display: none; }
+  .kb-page-head .btn { font-size: .78rem; }
+  .kb-action-grid { grid-template-columns: minmax(0,1fr); gap: 8px; margin-bottom: 24px; }
+  .kb-action-card { padding: 12px; }
+  .kb-overview-grid { gap: 12px; }
+  .kb-metric { padding: 14px; }
+  .kb-metric strong { font-size: 1.45rem; }
+  .kb-trend-panel { padding-inline: 10px; }
+  .kb-clean-panel { padding-inline: 14px; }
+}
+
+/* Task workspaces: one active workflow at a time instead of one endless page. */
+.kb-workspace-tabs {
+  position: sticky;
+  top: calc(var(--kb-topbar-h) + 8px);
+  z-index: 1015;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px 0 20px;
+  padding: 5px;
+  border: 1px solid var(--kb-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--kb-surface) 94%, transparent);
+  box-shadow: 0 8px 22px rgba(16,24,40,.05);
+  backdrop-filter: blur(12px);
+}
+.kb-workspace-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 13px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--kb-muted);
+  font-size: .82rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.kb-workspace-tabs button:hover { color: var(--kb-text); background: var(--kb-bg); }
+.kb-workspace-tabs button.is-active { color: var(--kb-primary); background: rgba(23,105,224,.10); font-weight: 650; }
+.kb-workspace-tabs button small { min-width: 20px; padding: 2px 6px; border-radius: 999px; background: var(--kb-bg); color: var(--kb-muted); font-size: .64rem; }
+.kb-workspace-tabs button.is-active small { background: var(--kb-surface); color: var(--kb-primary); }
+[data-office-panel], [data-settings-panel] { display: none !important; }
+[data-office-panel].is-active, [data-settings-panel].is-active { display: block !important; }
+.kb-settings-tabs { overflow-x: auto; scrollbar-width: thin; }
+.kb-settings-tabs button { flex: 0 0 auto; }
+.kb-version-chip { padding: 5px 9px; border: 1px solid var(--kb-border); border-radius: 999px; color: var(--kb-muted); background: var(--kb-surface); font-size: .72rem; }
+
+/* Calm down legacy Bootstrap cards inside the redesigned workspaces. */
+#office-scope .card,
+[data-settings-panel] {
+  box-shadow: none !important;
+}
+#office-scope .card-header,
+[data-settings-panel] > .card-header {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-bottom-color: var(--kb-border);
+}
+#office-scope .office-module { margin-bottom: 0; }
+#office-search { margin-bottom: 18px !important; }
+#office-search .card { background: color-mix(in srgb, var(--kb-surface) 96%, var(--kb-primary)); }
+[data-settings-panel] { margin-top: 0 !important; }
+
+@media (max-width: 767px) {
+  .kb-workspace-tabs { top: calc(var(--kb-topbar-h) + 4px); overflow-x: auto; justify-content: flex-start; margin-inline: -4px; }
+  .kb-workspace-tabs button { flex: 0 0 auto; padding-inline: 11px; }
+  .kb-workspace-tabs button span { display: inline; }
+  [data-settings-panel] .table-responsive > table { min-width: 720px; }
+}
+@media (max-width: 575px) {
+  .kb-sidebar-backdrop { display: block; }
+}
+
+/* ===========================================================================
+   阅读页版式体系 —— 全站统一（所有文章共用同一套结构 / 排版 / 视觉）
+   ---------------------------------------------------------------------------
+   结构层 .kb-reader   ：CSS Grid 双栏（正文 · 批注台）。左列用 minmax(0,1fr)，
+                        从布局层面保证正文永不被超宽内容撑破，批注台宽度恒定。
+   排版层 .kb-prose    ：标题阶梯 / 段落 / 列表 / 引用 / 代码 / 表格 / 图片的完整
+                        度量体系，每一类可能超宽的块都有明确约束。
+   组件层 .kb-reader-side：批注台卡片统一底纹、强调线与间距节奏。
+   =========================================================================== */
+
+/* ---------------------------- 结构层：双栏版式 ----------------------------
+   ⚠️ 硬约束：两个阅读模板里 <aside class="kb-reader-side"> 排在
+   <article class="kb-reader-main"> **之前**（批注台在 DOM 里就是第一个）。
+   原因：批注台必须「结构上永远可达」。正文动辄几万像素高，一旦批注台在 DOM 里
+   落在正文之后，任何一次样式失效（旧缓存、断点写错、CSS 加载失败）都会把它推到
+   正文末尾 —— 用户看到的现象不是「排版变了」，而是「**批注台被删除了**」。
+   放在前面后，即使所有布局规则都失效，它也只会退化成「出现在正文上方」，
+   绝不会消失。宽屏的「正文在左、批注台在右」由下面两行显式落位实现，
+   **不依赖 DOM 顺序**，所以改序不影响宽屏版式。 */
+.kb-reader {
+  display: grid;
+  /* 批注台宽度自适应：宽屏取 344px 上限，窄屏压缩到 280px 下限，
+     把省下的宽度让给正文 —— 这样 1280 这类常见笔记本分辨率下，
+     正文列也放得下六列宽表格，不必横向滚动。 */
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 26%, var(--kb-read-side-w));
+  gap: var(--kb-read-col-gap);
+  align-items: start;
+}
+.kb-reader-main { grid-column: 1; grid-row: 1; min-width: 0; }
+.kb-reader-side { grid-column: 2; grid-row: 1; min-width: 0; }
+
+/* 单栏断点与 Bootstrap 的 lg（992px）对齐 —— 这点是硬约束：
+   原 `col-lg-8 / col-lg-4` 在 ≥992px 就是并排的，若把断点抬到 1200，
+   则在 992~1199（1024 / 1093 / 1152 等常见窗口与高 DPI 缩放组合）区间里，
+   批注台会被单栏布局推到上万像素长的正文**之后**，视觉上等同于「批注台被移除」。
+   ≥992px 一律并排，保证批注台始终在首屏右侧。
+   单栏时批注台落 row 1、正文落 row 2 —— 批注台上移到正文**之前**：它是阅读时的
+   随取工具区（写笔记 / 存金句 / 看双向链接），沉下去用户根本找不到。 */
+@media (max-width: 991.98px) {
+  .kb-reader { grid-template-columns: minmax(0, 1fr); }
+  .kb-reader-side { grid-column: 1; grid-row: 1; }
+  .kb-reader-main { grid-column: 1; grid-row: 2; }
+}
+
+/* ---------------------------- 排版层：正文 ---------------------------- */
+.kb-prose {
+  font-size: var(--kb-read-size);
+  line-height: var(--kb-read-line);
+  color: var(--kb-text);
+  /* 段落内的长 URL / 文件路径 / 无空格长串一律可折，不再顶破卡片 */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.kb-prose > :first-child { margin-top: 0; }
+.kb-prose > :last-child { margin-bottom: 0; }
+
+/* 标题阶梯：字号递减、上间距大于下间距，形成清晰的层级节奏 */
+.kb-prose h1, .kb-prose h2, .kb-prose h3,
+.kb-prose h4, .kb-prose h5, .kb-prose h6 {
+  margin: var(--kb-read-head-gap) 0 .55em;
+  line-height: 1.35;
+  font-weight: 650;
+  color: var(--kb-text);
+}
+.kb-prose h1 { font-size: 1.5em; padding-bottom: .32em; border-bottom: 2px solid var(--kb-border); }
+.kb-prose h2 { font-size: 1.28em; padding-bottom: .28em; border-bottom: 1px solid var(--kb-border); }
+.kb-prose h3 { font-size: 1.12em; }
+/* 三级标题加一道主色短竖条，长文档里一眼能看出层次 */
+.kb-prose h3::before {
+  content: ''; display: inline-block; width: 3px; height: .92em; margin-right: .5em;
+  background: var(--kb-primary); border-radius: 2px; vertical-align: -.08em;
+}
+.kb-prose h4 { font-size: 1.02em; }
+.kb-prose h5, .kb-prose h6 { font-size: .96em; color: var(--kb-muted); }
+
+/* 段落与行内元素 */
+.kb-prose p { margin: 0 0 var(--kb-read-gap); }
+.kb-prose strong { font-weight: 650; }
+.kb-prose del { color: var(--kb-muted); }
+.kb-prose a {
+  color: var(--kb-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.kb-prose a:hover { color: var(--kb-primary-hover); }
+.kb-prose hr { border: 0; border-top: 1px solid var(--kb-border); margin: var(--kb-read-block-gap) 0; }
+
+/* 列表：统一缩进、条目与嵌套间距 */
+.kb-prose ul, .kb-prose ol { margin: 0 0 var(--kb-read-gap); padding-left: 1.5em; }
+.kb-prose ul { list-style: disc; }
+.kb-prose ul ul { list-style: circle; }
+.kb-prose ol { list-style: decimal; }
+.kb-prose li { margin: .3em 0; }
+.kb-prose li > ul, .kb-prose li > ol { margin: .3em 0; }
+.kb-prose li::marker { color: var(--kb-primary); }
+
+/* 引用 */
+.kb-prose blockquote {
+  margin: 0 0 var(--kb-read-block-gap);
+  padding: .6em 1em;
+  border-left: 3px solid var(--kb-primary);
+  border-radius: 0 8px 8px 0;
+  background: var(--kb-bg);
+  color: var(--kb-muted);
+}
+.kb-prose blockquote > :last-child { margin-bottom: 0; }
+
+/* 代码：行内与块级分开定义 */
+.kb-prose code {
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  padding: .12em .4em;
+  border-radius: 4px;
+  font-size: .88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+.kb-prose pre {
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin: 0 0 var(--kb-read-block-gap);
+  overflow: auto;          /* 长代码行在本块内滚动，不顶破正文列 */
+  max-height: 460px;
+  font-size: .88em;
+  line-height: 1.6;
+}
+.kb-prose pre code { background: none; border: 0; padding: 0; font-size: 1em; }
+
+/* 表格：外层 wrap 承担横向滚动；单元格 break-word 保住自然列宽。
+   —— 不要改成 overflow-wrap:anywhere：那会把每列 min-content 压到 1 个字符，
+      日期 / 大小 / 类型这类短列会被长列（路径 · 摘要）挤成逐字竖排。
+   —— 用 min-width 给单元格一个内容下限，保证短列整行显示；列数很多时由
+      .kb-table-wrap 的横向滚动兜底，绝不外溢到批注台。 */
+.kb-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 var(--kb-read-block-gap);
+}
+.kb-table-wrap > table { width: 100%; border-collapse: collapse; margin: 0; }
+.kb-prose table { width: 100%; border-collapse: collapse; margin: 0 0 var(--kb-read-block-gap); }
+.kb-prose th, .kb-prose td {
+  border: 1px solid var(--kb-border);
+  padding: 7px 11px;
+  overflow-wrap: anywhere;
+  /* 列下限：让「日期 / 大小 / 类型」这类短内容保住整行。
+     auto 布局会把 min-width 之外的全部余量按内容比例分给长列（路径 / 摘要），
+     所以这个值只决定「最短列有多宽」，不会让长列变窄 —— 这正是短列不被压扁、
+     长列又能拿到宽度的原因。7.5em（≈116px）是实测能容下「2026-09-09」整行的值。 */
+  min-width: 7.5em;
+  vertical-align: top;
+}
+/* 首列通常是序号 / 编号这类极短内容，单独收窄，把省下的宽度让给日期与摘要列 */
+.kb-prose th:first-child,
+.kb-prose td:first-child { min-width: 4.5em; }
+.kb-prose thead th {
+  background: var(--kb-bg);
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;     /* 表头都很短，不折行 → 每列天然有一个合理下限 */
+}
+.kb-prose tbody tr:nth-child(even) { background: color-mix(in srgb, var(--kb-bg) 55%, transparent); }
+.kb-prose tbody tr:hover { background: color-mix(in srgb, var(--kb-primary) 7%, transparent); }
+
+/* 图片与媒体：任何情况下都不允许溢出正文列 */
+.kb-prose img, .kb-prose video, .kb-prose svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.kb-prose p > img { display: block; }
+.kb-prose figcaption { font-size: .9em; color: var(--kb-muted); text-align: center; margin-top: .4em; }
+.kb-wikilink, a.kb-wikilink { color: var(--kb-primary); font-weight: 600; text-decoration: none; border-bottom: 1px dashed var(--kb-primary); }
+.kb-wikilink:hover { background: rgba(37,99,235,.1); }
+
+/* 知识沉淀：来源链接与「原文已删除」提示 */
+.kb-origin-link { color: var(--kb-primary); text-decoration: none; }
+.kb-origin-link:hover { text-decoration: underline; }
+.kb-origin-deleted { color: #c0392b; font-weight: 600; }
+.kb-src-opt { padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+.kb-src-opt:hover { background: var(--kb-bg); }
+.kb-precip-item { background: var(--kb-surface, #fff); }
+[data-theme="dark"] .kb-precip-item { background: #1b2230; }
+
+/* 划句浮动工具条 */
+#kbSelBar {
+  position: absolute; display: none; z-index: 2000; gap: 2px;
+  background: var(--kb-primary); border-radius: 8px; padding: 4px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+#kbSelBar button {
+  border: 0; background: transparent; color: #fff; font-size: 13px;
+  padding: 4px 10px; border-radius: 6px; cursor: pointer;
+}
+#kbSelBar button:hover { background: rgba(255,255,255,.18); }
+
+/* AI 弹窗 */
+#kbAiModal {
+  position: fixed; inset: 0; display: none; z-index: 2100;
+  background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+}
+.kb-ai-box {
+  width: min(640px, 92vw); background: var(--kb-surface); color: var(--kb-text);
+  border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.35); overflow: hidden;
+}
+.kb-ai-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--kb-border); }
+.kb-ai-head button { border: 0; background: transparent; font-size: 22px; line-height: 1; color: var(--kb-muted); cursor: pointer; }
+.kb-ai-body { display: flex; gap: 8px; padding: 14px 16px; }
+.kb-ai-body input { flex: 1; padding: 8px 10px; border: 1px solid var(--kb-border); border-radius: 8px; background: var(--kb-bg); color: var(--kb-text); }
+.kb-ai-body button { padding: 8px 16px; border: 0; border-radius: 8px; background: var(--kb-primary); color: #fff; cursor: pointer; }
+.kb-ai-a { padding: 0 16px 18px; max-height: 50vh; overflow: auto; white-space: pre-wrap; line-height: 1.7; }
+
+/* ===========================================================================
+   知识编辑页（wiki_node_edit.html）：所见即所得编辑器
+   ---------------------------------------------------------------------------
+   编辑区直接复用阅读页的 .kb-prose 排版 —— 编辑态的字号、行高、标题阶梯、
+   列表符号、引用竖线、表格留白与阅读页完全同源，所以「在编辑器里看到的」
+   就是「保存后读到的」，不存在两套版式。这里只补编辑器特有的"可操作痕迹"：
+   吸顶工具栏、单元格聚焦态、表格工具条、空文档占位提示。
+   =========================================================================== */
+.kb-toolbar {
+  position: sticky;
+  /* 让开全局顶栏（--kb-topbar-h）后再吸顶，否则会被顶栏压住 */
+  top: calc(var(--kb-topbar-h) + 6px);
+  z-index: 1020;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-bottom: 0;
+  border-radius: var(--kb-radius) var(--kb-radius) 0 0;
+  box-shadow: var(--kb-shadow);
+}
+.kb-toolbar .kb-tb-btn { display: inline-flex; align-items: center; gap: 4px; font-size: .82rem; white-space: nowrap; }
+/* 高亮 = 光标处已是该格式，再点一次即取消（所见即所得的双向反馈） */
+.kb-toolbar .kb-tb-btn.active { background: var(--kb-primary); border-color: var(--kb-primary); color: #fff; }
+.kb-block-select { width: auto; min-width: 92px; font-size: .82rem; }
+.kb-editor-count {
+  font-size: .78rem; color: var(--kb-muted); white-space: nowrap;
+  margin: 0 8px; font-variant-numeric: tabular-nums;
+}
+/* 源码模式下格式按钮失去意义：整体降透明度并禁用，避免误点后没反应 */
+.kb-toolbar.kb-toolbar-source [data-cmd],
+.kb-toolbar.kb-toolbar-source .kb-block-select { opacity: .4; pointer-events: none; }
+
+.kb-editor {
+  min-height: 480px;
+  padding: 24px 28px 32px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-radius: 0 0 var(--kb-radius) var(--kb-radius);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kb-editor:focus { border-color: var(--kb-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+.kb-editor.kb-editor-empty::after {
+  content: '在这里直接写正文 —— 需要加粗、标题、列表、表格就点上方按钮，不必记语法。';
+  color: var(--kb-muted);
+  font-size: .92em;
+}
+/* 光标所在单元格高亮：表格里编辑时才知道自己改的是哪一格 */
+.kb-editor table td, .kb-editor table th { position: relative; }
+.kb-editor table td.kb-cell-active, .kb-editor table th.kb-cell-active {
+  outline: 2px solid var(--kb-primary);
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, .07);
+}
+.kb-editor a { cursor: text; }
+.kb-editor a:hover { cursor: pointer; }
+
+.kb-editor-src {
+  min-height: 480px;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .88rem;
+}
+
+.kb-tblbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-radius: 8px;
+  box-shadow: var(--kb-shadow);
+  z-index: 20;
+  font-size: .78rem;
+  white-space: nowrap;
+}
+.kb-tblbar-label { color: var(--kb-muted); margin-right: 2px; }
+
+.kb-editor-hint { margin-top: 8px; font-size: .8rem; color: var(--kb-muted); line-height: 1.7; }
+.kb-draft-bar { font-size: .85rem; }
+.kb-loss-warn { font-size: .9rem; line-height: 1.8; }
+.kb-force-check { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.kb-force-check .form-check-input { margin: 0; }
+
+/* 工具栏轻提示：只解释"为什么此操作在当前位置无意义"，不打扰编辑 */
+.kb-hint-toast {
+  position: fixed; left: 50%; bottom: 90px;
+  transform: translateX(-50%) translateY(12px);
+  background: #111827; color: #fff; padding: 9px 16px; border-radius: 10px;
+  font-size: .85rem; line-height: 1.5; max-width: min(560px, 88vw);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+  opacity: 0; pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease; z-index: 2300;
+}
+.kb-hint-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Toast */
+.kb-toast {
+  position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%) translateY(20px);
+  background: #111827; color: #fff; padding: 10px 18px; border-radius: 10px;
+  opacity: 0; transition: all .25s ease; z-index: 2200; font-size: 14px;
+}
+.kb-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+[data-theme="dark"] .kb-ai-box { background: var(--kb-surface); }
+[data-theme="dark"] .kb-ai-body input { background: var(--kb-bg); color: var(--kb-text); }
+
+/* 目录树 */
+.kb-folder-tree { font-size: 13px; max-height: 360px; overflow: auto; }
+.kb-tree { list-style: none; padding-left: 14px; margin: 0; }
+.kb-tree .kb-tree { border-left: 1px dashed var(--kb-border); margin-left: 4px; padding-left: 12px; }
+.kb-dir { font-weight: 600; color: var(--kb-text); }
+.kb-file { color: var(--kb-muted); }
+
+/* ---------------------------- 组件层：批注台 ----------------------------
+   ① 卡片之间用 flex gap 统一间距，不再依赖 mb-3，避免双倍留白；
+   ② 独立底纹 + 左侧主色强调线，把「批注」与「正文」分成两个一眼可分的平面；
+   ③ 宽屏吸顶常驻，窄屏（已退单栏）随正文自然排布；
+   ④ 辅助文案用实色 --kb-note-muted，替代 .75 透明灰在底纹上的发虚。 */
+.kb-reader-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* 并排布局下批注台吸顶常驻：随正文滚动始终留在视口内（让开全局顶栏高度）。
+   断点必须与上面的单栏断点一致（992），否则会出现「并排但不吸顶」的中间态。 */
+@media (min-width: 992px) {
+  .kb-reader-side {
+    position: sticky;
+    top: calc(var(--kb-topbar-h, 64px) + 16px);
+    max-height: calc(100vh - var(--kb-topbar-h, 64px) - 32px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .kb-reader-side::-webkit-scrollbar { width: 6px; }
+  .kb-reader-side::-webkit-scrollbar-thumb { background: var(--kb-border); border-radius: 3px; }
+}
+.kb-reader-side .card {
+  margin-bottom: 0;
+  background: var(--kb-note-surface);
+  border: 1px solid var(--kb-note-border);
+  border-left: 3px solid var(--kb-note-accent);
+  border-radius: 10px;
+}
+.kb-reader-side .card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--kb-note-border);
+  color: var(--kb-note-head);
+  font-weight: 650;
+}
+.kb-reader-side .list-group-item {
+  background: transparent;
+  border-color: var(--kb-note-border);
+}
+.kb-reader-side .text-muted,
+.kb-reader-side .kb-note-empty,
+.kb-reader-side .kb-golden-empty {
+  color: var(--kb-note-muted) !important;
+}
+
+/* 批注台标题条：与左侧正文卡头「正文」对称，给整块侧栏一个明确的名字。
+   单栏（<992）下它还是「这里就是批注台」的视觉锚点 —— 批注台被上移到正文之前时，
+   用户第一眼就能确认它还在、并没被移除。 */
+.kb-side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--kb-note-surface);
+  border: 1px solid var(--kb-note-border);
+  border-left: 3px solid var(--kb-note-accent);
+  color: var(--kb-note-head);
+  font-size: .95rem;
+  font-weight: 650;
+}
+.kb-side-head .kb-side-head-tip {
+  margin-left: auto;
+  font-size: .76rem;
+  font-weight: 400;
+  color: var(--kb-note-muted);
+}
+
+/* ---------------- 系统设置 · 架构树状总览 ---------------- */
+.arch-tabs {
+  border-bottom: 1px solid var(--kb-border);
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.arch-tabs .nav-link {
+  color: var(--kb-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  font-size: 13.5px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.arch-tabs .nav-link:hover { color: var(--kb-text); background: var(--kb-bg); }
+.arch-tabs .nav-link.active {
+  color: var(--kb-primary);
+  background: transparent;
+  border-bottom-color: var(--kb-primary);
+  font-weight: 600;
+}
+.arch-count {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  color: var(--kb-muted);
+  font-weight: 600;
+}
+.arch-tabs .nav-link.active .arch-count { color: var(--kb-primary); border-color: var(--kb-primary); }
+
+.arch-tree {
+  font-size: 13.5px;
+  max-height: 480px;
+  overflow: auto;
+  padding: 4px 2px;
+  border: 1px solid var(--kb-border);
+  border-radius: var(--kb-radius);
+  background: var(--kb-surface);
+}
+.arch-tree ul { list-style: none; margin: 0; padding-left: 20px; position: relative; }
+.arch-tree ul.arch-root { padding-left: 6px; }
+.arch-tree ul ul::before {
+  content: '';
+  position: absolute;
+  left: 9px; top: 0; bottom: 0;
+  border-left: 1px dashed var(--kb-border);
+}
+.arch-tree li { position: relative; }
+.arch-tree li li::before {
+  content: '';
+  position: absolute;
+  left: -11px; top: 14px;
+  width: 9px; height: 0;
+  border-top: 1px dashed var(--kb-border);
+}
+
+.arch-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin: 1px 0;
+  border-radius: 6px;
+  min-width: 0;
+}
+.arch-node:hover { background: var(--kb-bg); }
+.arch-branch-row { cursor: pointer; user-select: none; font-weight: 600; color: var(--kb-text); }
+.arch-leaf-row { color: var(--kb-muted); cursor: default; }
+.arch-caret {
+  display: inline-flex;
+  width: 14px;
+  justify-content: center;
+  color: var(--kb-muted);
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.arch-caret-blank { visibility: hidden; }
+li.arch-branch > .arch-node .arch-caret i { color: var(--kb-primary); }
+li.arch-branch.collapsed > .arch-node .arch-caret { transform: rotate(-90deg); }
+li.arch-branch.collapsed > .arch-children { display: none; }
+
+.arch-name { white-space: nowrap; }
+.arch-desc {
+  color: var(--kb-muted);
+  font-weight: 400;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arch-badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  color: var(--kb-muted);
+  flex: none;
+}
+.tree-ico-dir { color: #f59e0b; }
+.tree-ico-leaf { color: var(--kb-border); font-size: 10px; }
+.arch-toolbar .arch-btn { --bs-btn-padding-y: 0.2rem; --bs-btn-font-size: 12.5px; }
+.arch-tree::-webkit-scrollbar { width: 6px; }
+.arch-tree::-webkit-scrollbar-thumb { background: var(--kb-border); border-radius: 3px; }
+
+[data-theme="dark"] .tree-ico-dir { color: #fbbf24; }
+[data-theme="dark"] .arch-node:hover { background: rgba(148, 163, 184, 0.12); }

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}{{ wf.title }} - 工作文件 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+  <a href="/office/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> 返回办公平台</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-transparent fw-semibold d-flex align-items-center gap-2 flex-wrap">
+    <i class="bi bi-folder-symlink text-primary"></i> {{ wf.title }}
+    <span class="badge bg-secondary text-white">{{ wf.get_source_display }}</span>
+    <span class="badge bg-light text-dark border">{{ wf.category }}</span>
+    {% if wf.ext %}<span class="badge bg-info text-dark">.{{ wf.ext }}</span>{% endif %}
+  </div>
+  <div class="card-body">
+    <div class="row small text-muted mb-3 g-2">
+      <div class="col-md-3"><i class="bi bi-folder2"></i> 分类：{{ wf.category }}</div>
+      <div class="col-md-3"><i class="bi bi-hdd"></i> 大小：{{ size_str }}</div>
+      <div class="col-md-3"><i class="bi bi-clock-history"></i> 修改：{{ mtime_str }}</div>
+      <div class="col-md-3">
+        <a href="/office/workfile_open/{{ wf.pk }}/" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right"></i> 打开原文件
+        </a>
+      </div>
+    </div>
+    <div class="mb-3">
+      <code class="small text-muted">{{ wf.original_path }}</code>
+    </div>
+
+    {% if is_image %}
+    <div class="text-center mb-3">
+      <img src="/office/workfile_open/{{ wf.pk }}/" class="img-fluid rounded border" alt="{{ wf.title }}">
+    </div>
+    {% endif %}
+
+    <h6 class="small text-muted">提取内容（供检索与速览，原文以「打开原文件」为准）</h6>
+    <div class="kb-content border rounded p-3 bg-body-secondary">
+      {% if html %}
+        {{ html|safe }}
+      {% else %}
+        <p class="text-muted mb-0">该文件无可提取的文本内容（如图片未 OCR、或二进制文档），请点击「打开原文件」查看原件。</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

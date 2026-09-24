@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}{% if node %}编辑{% else %}新建{% endif %}知识页 - {{ platform_name }}{% endblock %}
+{% block content %}
+<h2 class="mb-3">{% if node %}<i class="bi bi-pencil"></i> 编辑：{{ node.title }}{% else %}<i class="bi bi-plus-lg"></i> 新建知识页{% endif %}</h2>
+
+{% if loss_warning %}
+<div class="alert alert-warning kb-loss-warn">
+  <i class="bi bi-exclamation-triangle"></i> <strong>已拦截本次保存：</strong>{{ loss_warning }}
+</div>
+{% endif %}
+
+{% comment %}
+  草稿条：本机 localStorage 里若有未提交的草稿，进入页面时由 md-editor.js 填内容并显示。
+  保护的是「写了很久、误关页面」这类场景 —— 草稿只在浏览器本地，服务端不存。
+{% endcomment %}
+<div id="mdDraftBar" class="alert alert-info d-none d-flex flex-wrap align-items-center gap-2 kb-draft-bar"></div>
+
+<form method="post" id="mdForm" action="{% if node %}/wiki/node/{{ node.pk }}/edit/{% else %}/wiki/create/{% endif %}">
+  {% csrf_token %}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label small">标题</label>
+      <input type="text" name="title" class="form-control" value="{{ f_title }}" required>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">类型</label>
+      <select name="node_type" class="form-select">
+        <option value="wiki" {% if f_node_type == 'wiki' %}selected{% endif %}>WiKI 页</option>
+        <option value="article" {% if f_node_type == 'article' %}selected{% endif %}>文章</option>
+        <option value="doc" {% if f_node_type == 'doc' %}selected{% endif %}>资料</option>
+        <option value="note" {% if f_node_type == 'note' %}selected{% endif %}>笔记</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">分类</label>
+      <input type="text" name="category" class="form-control" value="{{ f_category }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">标签</label>
+      <input type="text" name="tags" class="form-control" value="{{ f_tags }}" placeholder="逗号分隔">
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    {% if not node %}
+    <div class="col-md-6">
+      <label class="form-label small">归属知识库</label>
+      <select name="base" class="form-select">
+        {% for b in bases %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-md-6">
+      <label class="form-label small">父节点（可选，构建知识树）</label>
+      <select name="parent" class="form-select">
+        <option value="">（顶级，无父节点）</option>
+        {% for p in parent_candidates %}
+        <option value="{{ p.pk }}" {% if f_parent == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <label class="form-label small mb-1">正文</label>
+
+    {% comment %}
+      工具栏：按「样式 → 段落结构 → 插入 → 收尾」分组，全部按钮作用于当前选区，
+      按钮不做"插入语法符号"，而是直接改变文字的呈现（加粗就是加粗，不是打两个星号）。
+      只暴露渲染器真正支持的格式：本平台 Markdown 渲染器不支持删除线/下划线/高亮，
+      所以这里也不提供 —— 避免"编辑时有、存完就没了"的错觉。
+    {% endcomment %}
+    <div class="kb-toolbar sticky-top" id="mdToolbar" role="toolbar" aria-label="正文格式工具栏">
+      <div class="btn-group btn-group-sm me-1" role="group" aria-label="文字样式">
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="bold" title="加粗（选中文字后点，快捷键 Ctrl+B）"><b>B</b></button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="italic" title="斜体（快捷键 Ctrl+I）"><i>I</i></button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="code" title="行内代码（等宽底色，适合命令、参数、变量名）"><i class="bi bi-code"></i> 代码</button>
+      </div>
+
+      <div class="btn-group btn-group-sm me-1" role="group" aria-label="段落结构">
+        <select class="form-select form-select-sm kb-block-select" id="mdBlockSelect" title="段落级别：把光标所在段落切换为正文 / 标题 / 引用 / 代码块">
+          <option value="<p>">正文</option>
+          <option value="<h1>">标题 1</option>
+          <option value="<h2>">标题 2</option>
+          <option value="<h3>">标题 3</option>
+          <option value="<h4>">标题 4</option>
+          <option value="<blockquote>">引用</option>
+          <option value="<pre>">代码块</option>
+        </select>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="ul" title="无序列表（• 项目符号）"><i class="bi bi-list-ul"></i> 列表</button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="ol" title="有序列表（1. 2. 3.）"><i class="bi bi-list-ol"></i> 编号</button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="hr" title="插入分隔线"><i class="bi bi-dash-lg"></i> 分隔线</button>
+      </div>
+
+      <div class="btn-group btn-group-sm me-1" role="group" aria-label="插入">
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="link" title="插入链接（选中文字后点，快捷键 Ctrl+K）"><i class="bi bi-link-45deg"></i> 链接</button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="wikilink" title="插入知识页双链：以标题关联另一页，系统自动生成反向链接"><i class="bi bi-bezier2"></i> 双链</button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="table" title="插入表格（3 行 3 列，插入后可用表格工具条增删行列）"><i class="bi bi-table"></i> 表格</button>
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="timestamp" title="插入当前时间"><i class="bi bi-clock"></i> 时间</button>
+      </div>
+
+      <div class="btn-group btn-group-sm me-auto" role="group" aria-label="清除">
+        <button type="button" class="btn btn-outline-secondary kb-tb-btn" data-cmd="clear" title="清除所选文字的格式，恢复为纯文字"><i class="bi bi-eraser"></i> 清除格式</button>
+      </div>
+
+      <span class="kb-editor-count" id="mdCount">0 字</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="mdModeBtn" title="切换到 Markdown 源码视图（默认不需要，仅处理极端结构时使用）">
+        <i class="bi bi-code-slash"></i> Markdown 源码
+      </button>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save"></i> 保存</button>
+    </div>
+
+    {% comment %}
+      表格工具条：光标进入任意单元格时浮现在该表格上方，用于增删行列。
+      之所以单独做，是因为 Markdown 表格在源码里对齐极其难写，富文本里点两下就行。
+    {% endcomment %}
+    <div class="kb-tblbar d-none" id="mdTableBar">
+      <span class="kb-tblbar-label"><i class="bi bi-table"></i> 表格</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-tbl="row-add">+ 行</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-tbl="row-del">- 行</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-tbl="col-add">+ 列</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-tbl="col-del">- 列</button>
+      <button type="button" class="btn btn-sm btn-outline-danger" data-tbl="table-del">删除表格</button>
+    </div>
+
+    {% comment %}
+      富文本编辑区：content_html 由服务端 render_markdown() 生成 —— 与阅读页同一个渲染器，
+      所以这里看到的就是保存后阅读页看到的样子。类 kb-prose 直接复用阅读页排版令牌。
+    {% endcomment %}
+    <div id="mdRich" class="kb-prose kb-editor" contenteditable="true" spellcheck="false"
+         data-render-url="/wiki/api/render/"
+         data-node-id="{% if node %}{{ node.pk }}{% else %}new{% endif %}"
+         aria-label="正文编辑区">{{ content_html|safe }}</div>
+
+    {% comment %}
+      唯一真源：表单提交的始终是 Markdown（name=content_md），富文本只是它的"视图"。
+      默认隐藏，点「Markdown 源码」才出现在前台。
+    {% endcomment %}
+    <textarea id="mdInput" name="content_md" class="form-control d-none kb-editor-src">{{ form_md }}</textarea>
+
+    <div class="kb-editor-hint">
+      <i class="bi bi-info-circle"></i>
+      选中文字后点上方按钮即可改格式，不会出现语法符号；Enter 自动延续列表/引用，标题后回车回到正文；
+      链接需按住 Ctrl 点击才会打开；粘贴 Markdown 源码会自动转成成稿。
+    </div>
+  </div>
+
+  <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
+    <button class="btn btn-primary"><i class="bi bi-save"></i> 保存</button>
+    {% if node %}<a href="/wiki/node/{{ node.pk }}/" class="btn btn-outline-secondary">取消</a>{% endif %}
+    <a href="/wiki/" class="btn btn-outline-secondary">返回列表</a>
+    <label class="form-check ms-auto kb-force-check" title="正文内容大幅缩减时，服务端会拦截保存；确认是有意删改时勾选此项">
+      <input class="form-check-input" type="checkbox" name="force_save" id="forceSave" value="1">
+      <span class="form-check-label small text-muted">我已核对内容完整性（内容大幅缩减时需勾选）</span>
+    </label>
+  </div>
+</form>
+
+{% comment %}
+  编辑任务标题：供「双链」按钮列出候选标题；同时说明 [[标题]] 等价于点「双链」按钮。
+{% endcomment %}
+<script>window.KB_TITLES = [{% for p in parent_candidates %}"{{ p.title|escapejs }}",{% endfor %}];</script>
+<script src="{% vstatic 'js/md-editor.js' %}"></script>
+{% endblock %}

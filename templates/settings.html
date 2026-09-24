@@ -1,0 +1,780 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}系统设置 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="kb-page-head">
+  <div>
+    <span class="kb-eyebrow">SETTINGS</span>
+    <h1>系统设置</h1>
+    <p>管理工作台、AI 服务、外部连接与数据备份。</p>
+  </div>
+  <span class="kb-version-chip">Django 5.2</span>
+</div>
+
+<nav class="kb-workspace-tabs kb-settings-tabs" id="settingsTabs" aria-label="系统设置分类">
+  <button type="button" class="is-active" data-settings-tab="general"><i class="bi bi-sliders"></i><span>基本设置</span></button>
+  <button type="button" data-settings-tab="profile"><i class="bi bi-person-vcard"></i><span>个人偏好</span></button>
+  <button type="button" data-settings-tab="ai"><i class="bi bi-cpu"></i><span>AI 服务</span></button>
+  <button type="button" data-settings-tab="integrations"><i class="bi bi-git"></i><span>外部连接</span></button>
+  <button type="button" data-settings-tab="backup"><i class="bi bi-shield-check"></i><span>备份迁移</span></button>
+  <button type="button" data-settings-tab="system"><i class="bi bi-diagram-3"></i><span>系统信息</span></button>
+</nav>
+
+<!-- 系统架构总览：四板块树状可视化（页签切换 + 节点展开/折叠） -->
+<div class="card shadow-sm mb-4" data-settings-panel="system">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-diagram-3"></i> 系统状态 · 平台架构总览</span>
+    <span class="small text-muted fw-normal"><i class="bi bi-cursor"></i> 点击节点展开 / 折叠 · 「▾」为可展开层级</span>
+  </div>
+  <div class="card-body pt-2">
+    <ul class="nav arch-tabs" id="archTabs" role="tablist">
+      {% for s in arch_sections %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if forloop.first %}active{% endif %}" id="tab-{{ s.key }}" data-bs-toggle="tab"
+                data-bs-target="#pane-{{ s.key }}" type="button" role="tab" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+          <i class="bi {{ s.icon }} text-{{ s.tone }} me-1"></i>{{ s.title }}
+          <span class="arch-count">{{ s.count }}</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="tab-content pt-3">
+      {% for s in arch_sections %}
+      <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ s.key }}" role="tabpanel">
+        {% if s.root %}<div class="small text-muted mb-1"><i class="bi bi-filesystem"></i> 根路径：<code>{{ s.root }}</code></div>{% endif %}
+        <div class="arch-toolbar d-flex justify-content-end gap-2 mb-2">
+          <button class="btn btn-outline-secondary arch-btn" data-act="expand" data-tree="{{ s.key }}"><i class="bi bi-arrows-expand"></i> 全部展开</button>
+          <button class="btn btn-outline-secondary arch-btn" data-act="collapse" data-tree="{{ s.key }}"><i class="bi bi-arrows-collapse"></i> 全部折叠</button>
+        </div>
+        <div class="arch-tree" id="tree-{{ s.key }}" data-depth="{{ s.default_depth }}" data-tone="{{ s.tone }}"></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{{ arch_tree|json_script:'arch-tree-data' }}
+
+<!-- 备份与迁移：三类备份（知识 / 系统 / 迁移），范围差异一屏看清 -->
+<style>
+  .bk-scope ul { margin: 0; padding-left: 1.05rem; }
+  .bk-scope ul li { margin-bottom: .1rem; }
+  .bk-scope-box { max-height: 210px; overflow-y: auto; border: 1px solid var(--kb-border);
+                  border-radius: var(--kb-radius); padding: .5rem .6rem; background: var(--kb-bg); }
+  .bk-scope-title { font-size: .75rem; font-weight: 600; letter-spacing: .02em; margin-bottom: .2rem; }
+  .bk-prev-total { font-size: .82rem; margin-bottom: .3rem; }
+  .bk-prev-table { font-size: .75rem; margin-bottom: .25rem; }
+  .bk-prev-table td { padding: .1rem .25rem; border-color: var(--kb-border); color: var(--kb-text); }
+  .bk-prev-table td:first-child { max-width: 190px; }
+  .bk-card .card-body { background: var(--kb-surface); }
+  .bk-hint { font-size: .74rem; color: var(--kb-muted); line-height: 1.35; }
+  .bk-cmp td, .bk-cmp th { font-size: .78rem; vertical-align: middle; }
+  .bk-legend { font-size: .78rem; color: var(--kb-muted); }
+</style>
+<div class="card shadow-sm mb-4 bk-card" id="backupCard" data-settings-panel="backup">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-shield-check"></i> 备份与迁移</span>
+    <span class="small text-muted fw-normal">
+      输出目录：<code>{{ backup_root }}</code>
+      <button class="btn btn-sm btn-outline-secondary ms-1" id="bkReveal" title="在资源管理器中打开备份目录">
+        <i class="bi bi-folder2-open"></i> 打开目录
+      </button>
+    </span>
+  </div>
+  <div class="card-body">
+    <p class="small text-muted mb-2">
+      三套备份的范围<b>互不相同</b>，先看对照表再动手：知识备份只搬知识，系统备份只搬程序（零知识数据），
+      迁移备份是两者的并集。单包体积上限 {{ backup_max_size|filesizeformat }}，超出会中止并把原因写进任务说明。
+    </p>
+
+    <div class="table-responsive mb-4">
+      <table class="table table-sm table-bordered align-middle mb-0 bk-cmp">
+        <thead class="table-light">
+          <tr>
+            <th style="width:120px">备份类型</th>
+            <th>程序代码</th><th>依赖环境 / 工具</th><th>知识资料</th><th>运行数据库</th><th>系统配置</th><th>典型用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><i class="bi bi-journal-arrow-down text-warning"></i> 知识备份</td>
+            <td class="text-danger">不含</td><td class="text-danger">不含</td>
+            <td class="text-success">全部（含上传媒体）</td>
+            <td>导出为 JSON</td><td class="text-danger">不含</td>
+            <td>换机、重装、误删时找回知识内容</td>
+          </tr>
+          <tr>
+            <td><i class="bi bi-box-seam text-primary"></i> 系统备份</td>
+            <td class="text-success">全部</td><td class="text-success">清单 + ffmpeg，venv 由脚本重建</td>
+            <td class="text-danger">零知识数据</td>
+            <td>新建空库</td><td class="text-danger">不含</td>
+            <td>发给他人装同款空平台</td>
+          </tr>
+          <tr>
+            <td><i class="bi bi-truck text-success"></i> 迁移备份</td>
+            <td class="text-success">全部</td><td class="text-success">清单 + ffmpeg，venv 由脚本重建</td>
+            <td class="text-success">全部</td>
+            <td class="text-success">原文件</td><td class="text-success">含</td>
+            <td>换电脑整体搬迁</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="row g-3">
+      {% for s in backup_specs %}
+      <div class="col-12 col-xl-4">
+        <div class="card h-100 border-{{ s.tone }}">
+          <div class="card-header bg-transparent d-flex justify-content-between align-items-start gap-2">
+            <span class="fw-semibold"><i class="bi {{ s.icon }} text-{{ s.tone }}"></i> {{ s.title }}</span>
+            <span class="badge bg-{{ s.tone }}-subtle text-{{ s.tone }}-emphasis border border-{{ s.tone }}-subtle">{{ s.badge }}</span>
+          </div>
+          <div class="card-body d-flex flex-column">
+            <div class="small fw-semibold mb-1">{{ s.subtitle }}</div>
+            <p class="bk-hint mb-2">{{ s.purpose }}</p>
+
+            <div class="bk-scope-box mb-2">
+              <div class="bk-scope-title text-success"><i class="bi bi-check2-circle"></i> 包含</div>
+              <div class="bk-scope"><ul class="small mb-2">
+                {% for x in s.includes %}<li>{{ x }}</li>{% endfor %}
+              </ul></div>
+              <div class="bk-scope-title text-danger"><i class="bi bi-slash-circle"></i> 不包含</div>
+              <div class="bk-scope"><ul class="small mb-0">
+                {% for x in s.excludes %}<li>{{ x }}</li>{% endfor %}
+              </ul></div>
+            </div>
+
+            {% for o in s.options %}
+            <div class="form-check bk-hint mb-1">
+              <input class="form-check-input bk-opt" type="checkbox" id="opt-{{ s.kind }}-{{ o.key }}"
+                     data-kind="{{ s.kind }}" data-key="{{ o.key }}" {% if o.default %}checked{% endif %}>
+              <label class="form-check-label" for="opt-{{ s.kind }}-{{ o.key }}">
+                {{ o.label }}<br><span class="text-muted">{{ o.hint }}</span>
+              </label>
+            </div>
+            {% endfor %}
+
+            <div class="mt-auto">
+              <div class="bk-preview mb-2" id="pv-{{ s.kind }}">
+                <button class="btn btn-sm btn-outline-secondary bk-preview-btn" data-kind="{{ s.kind }}">
+                  <i class="bi bi-calculator"></i> 预演范围与体积
+                </button>
+              </div>
+
+              <div class="progress d-none" id="pg-{{ s.kind }}" style="height:6px">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+              </div>
+              <div class="bk-hint mt-1 d-none" id="pgtext-{{ s.kind }}"></div>
+
+              <button class="btn btn-{{ s.tone }} w-100 mt-2 bk-start" data-kind="{{ s.kind }}">
+                <i class="bi bi-play-circle"></i> 执行{{ s.title }}
+              </button>
+              <div class="bk-hint mt-2"><i class="bi bi-info-circle"></i> {{ s.restore_hint }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 历史备份 -->
+    <div class="mt-4">
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <span class="fw-semibold small"><i class="bi bi-clock-history"></i> 历史备份</span>
+        <span class="bk-legend">包内自带 <code>备份清单.json</code> 与中文 <code>备份说明.md</code>，脱离平台也能核对范围</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr><th>类型</th><th>包名</th><th>体积</th><th>文件数</th><th>开始时间</th><th>状态</th><th class="text-end">操作</th></tr>
+          </thead>
+          <tbody id="bkTableBody">
+            <tr><td colspan="7" class="text-center text-muted py-3">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{{ backup_specs|json_script:'bk-specs' }}
+
+<!-- Gitee 库状态 -->
+<div class="card shadow-sm my-4" data-settings-panel="integrations">
+  <div class="card-header bg-transparent fw-semibold"><i class="bi bi-git"></i> Gitee 库状态</div>
+  <div class="card-body">
+    <div id="giteeBox" class="small">
+      {% if gitee_token_configured %}
+      <div class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>正在连接 Gitee…</div>
+      {% else %}
+      <div class="alert alert-warning mb-0">尚未配置 Gitee Token（在下方工作台设置填写）</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById('giteeBox');
+  if (!box) return;
+  if (!{{ gitee_token_configured|yesno:'true,false' }}) return;  // 未配置，模板已直接展示提示
+  fetch('/settings/gitee_repos/')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok && d.repos && d.repos.length) {
+        var html = '<p class="small text-success">已连接，共 ' + d.repos.length + ' 个仓库：</p><ul class="list-group list-group-flush">';
+        d.repos.forEach(function (r) {
+          html += '<li class="list-group-item small d-flex justify-content-between align-items-center">' +
+            '<a href="' + (r.url || '#') + '" target="_blank" rel="noopener">' + (r.name || '') + '</a>' +
+            '<span class="text-muted">' + (r.lang || '') + ' · ' + (r.desc || '').slice(0, 30) + '</span></li>';
+        });
+        html += '</ul>';
+        box.innerHTML = html;
+      } else {
+        box.innerHTML = '<div class="alert alert-warning mb-0">' + (d.error || 'Gitee 连接失败') + '</div>';
+      }
+    })
+    .catch(function (e) { box.innerHTML = '<div class="alert alert-warning mb-0">Gitee 请求失败：' + e + '</div>'; });
+})();
+</script>
+
+<!-- 工作台设置 -->
+<div class="card shadow-sm is-active" data-settings-panel="general">
+  <div class="card-header bg-transparent fw-semibold">工作台设置</div>
+  <div class="card-body">
+    {% if request.GET.saved %}<div class="alert alert-success py-2 mb-3">✅ 设置已保存。</div>{% endif %}
+    <form method="post" action="/settings/save/">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small">工作台名称</label>
+          <input name="platform_name" class="form-control" value="{{ cfg.platform_name }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">主题</label>
+          <select name="theme" class="form-select">
+            <option value="light" {% if cfg.theme == 'light' %}selected{% endif %}>浅色</option>
+            <option value="dark" {% if cfg.theme == 'dark' %}selected{% endif %}>深色</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">Gitee Token</label>
+          <input name="gitee_token" class="form-control" value="{{ cfg.gitee_token }}" placeholder="用于展示 Gitee 仓库列表">
+        </div>
+        <div class="col-12"><button class="btn btn-primary"><i class="bi bi-save"></i> 保存设置</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 个人设定与写作风格 -->
+<div class="card shadow-sm my-4" id="persona" data-settings-panel="profile">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-person-vcard"></i> 个人设定与写作风格（AI 输出遵循）</span>
+    <span class="badge bg-secondary fw-normal">办公平台「献策 / 生成报告」与 AI 助手会按此输出</span>
+  </div>
+  <div class="card-body">
+    {% if request.GET.saved %}<div class="alert alert-success py-2 mb-3">✅ 已保存。后续由本平台生成的材料将按此设定与风格输出。</div>{% endif %}
+    <p class="small text-muted mb-3">
+      这三段内容会作为「我的个人设定 / 表达风格 / 输出禁忌」注入到 AI 提示词中，用于统一所有生成材料的语气、结构与格式。
+      依据：2026-09-23 对桌面全量文件的写作样本与组织习惯分析（详见知识库「桌面文件归档 · 总索引」）。
+    </p>
+    <form method="post" action="/settings/save/">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small">个人设定（身份 / 岗位 / 工作场景，用于 AI 理解语境）</label>
+          <textarea name="user_profile" class="form-control font-monospace" rows="10"
+                    style="font-size:.82rem"
+                    placeholder="姓名、单位、岗位、三线职责、服务对象、常用系统…">{{ cfg.user_profile }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">写作风格（文体 / 结构 / 语言 / 格式）</label>
+          <textarea name="user_style" class="form-control font-monospace" rows="14"
+                    style="font-size:.82rem"
+                    placeholder="公文结构、序号层级、小标题习惯、数据化要求…">{{ cfg.user_style }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">输出禁忌（不该出现的写法）</label>
+          <textarea name="user_taboo" class="form-control font-monospace" rows="14"
+                    style="font-size:.82rem"
+                    placeholder="不口语化、不空泛表态、不虚构数据…">{{ cfg.user_taboo }}</textarea>
+        </div>
+        <div class="col-12 d-flex gap-2 align-items-center">
+          <button class="btn btn-primary"><i class="bi bi-save"></i> 保存个人设定与风格</button>
+          <a class="btn btn-outline-secondary" href="/office/">去办公平台试一下</a>
+          <span class="small text-muted">保存后立即生效，无需重启。</span>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- AI 多服务配置 -->
+<div class="card shadow-sm my-4" data-settings-panel="ai">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-cpu"></i> AI 服务配置（支持并行接入多家）</span>
+    <button class="btn btn-sm btn-outline-primary" id="aiAddBtn"><i class="bi bi-plus-lg"></i> 添加服务</button>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive mb-3">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>名称</th><th>类型</th><th>模型</th><th>接口地址</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+        <tbody id="aiProvTable">
+          {% for p in providers %}
+          <tr data-id="{{ p.id }}">
+            <td>{{ p.name }} {% if p.is_default %}<span class="badge bg-primary ms-1">默认</span>{% endif %}</td>
+            <td><span class="badge bg-light text-dark">{{ p.type }}</span></td>
+            <td class="small">{{ p.model }}</td>
+            <td class="small text-muted text-truncate" style="max-width:220px">{{ p.base_url }}</td>
+            <td>
+              {% if p.enabled %}
+                {% if p.configured %}<span class="badge bg-success">已启用·已配置</span>
+                {% else %}<span class="badge bg-warning text-dark">已启用·待填Key</span>{% endif %}
+              {% else %}<span class="badge bg-secondary">未启用</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-secondary ai-edit">编辑</button>
+              {% if not p.is_default %}<button class="btn btn-sm btn-outline-success ai-default">设为默认</button>{% endif %}
+              <button class="btn btn-sm btn-outline-info ai-test">测试</button>
+              {% if not p.is_default %}<button class="btn btn-sm btn-outline-danger ai-del">删除</button>{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">尚未配置任何 AI 服务</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-light small mb-3">
+      已启用的服务会在「划句问 AI」「办公献策 / 报告」中按默认服务调用；点击「并行询问」可同时向所有已启用服务发问并对比回答。
+    </div>
+
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-8">
+        <label class="form-label small">并行询问示例（向所有已启用服务同时提问）</label>
+        <input id="aiAskAllQ" class="form-control" value="用一句话介绍你自己，并说明你的特长。">
+      </div>
+      <div class="col-12 col-md-4">
+        <button class="btn btn-primary w-100" id="aiAskAllBtn"><i class="bi bi-lightning-charge"></i> 并行询问全部</button>
+      </div>
+    </div>
+    <div id="aiAskAllResult" class="mt-3"></div>
+  </div>
+</div>
+
+<!-- AI 服务 添加/编辑 弹层 -->
+<div class="modal fade" id="aiModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title">AI 服务</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="aiF_id">
+        <div class="mb-2"><label class="form-label small">服务名称</label><input id="aiF_name" class="form-control" placeholder="如：通义千问 / DeepSeek"></div>
+        <div class="mb-2"><label class="form-label small">服务类型</label>
+          <select id="aiF_type" class="form-select">
+            {% for k,v in provider_types.items %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2"><label class="form-label small">模型名</label><input id="aiF_model" class="form-control" placeholder="qwen-plus / deepseek-chat …"></div>
+        <div class="mb-2"><label class="form-label small">接口地址（base_url，到 /v1）</label><input id="aiF_base" class="form-control" placeholder="https://.../v1"></div>
+        <div class="mb-2"><label class="form-label small">API Key</label><input id="aiF_key" class="form-control" placeholder="sk-...（留空则本服务降级）"></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="aiF_enabled" checked><label class="form-check-label small">启用该服务</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="aiF_default"><label class="form-check-label small">设为默认服务</label></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button><button class="btn btn-primary btn-sm" id="aiF_save">保存</button></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* 设置页按主题分区，避免所有高级配置同时铺开。 */
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-settings-tab]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[data-settings-panel]'));
+  function activate(name, updateHash) {
+    if (!tabs.some(function (t) { return t.dataset.settingsTab === name; })) name = 'general';
+    tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.settingsTab === name); });
+    panels.forEach(function (p) { p.classList.toggle('is-active', p.dataset.settingsPanel === name); });
+    if (updateHash && history.replaceState) history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.settingsTab, true); }); });
+  var initial = location.hash.replace('#', '');
+  if (initial === 'persona') initial = 'profile';
+  if (new URLSearchParams(location.search).has('saved') && !initial) initial = 'general';
+  activate(initial || 'general', false);
+})();
+
+/* ---------------- 系统架构树状总览渲染器 ---------------- */
+(function () {
+  var dataBox = document.getElementById('arch-tree-data');
+  if (!dataBox) return;
+  var DATA = JSON.parse(dataBox.textContent);
+  var ICONS = {
+    layer: ['bi-stack', 'text-primary'],
+    dir:   ['bi-folder2', 'tree-ico-dir'],
+    file:  ['bi-file-earmark', 'text-secondary'],
+    leaf:  ['bi-dot', 'tree-ico-leaf'],
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 生成单个节点 <li>；depth 从 1 计；defaultDepth 以内的分支默认展开
+  function buildNode(node, depth, defaultDepth) {
+    var li = document.createElement('li');
+    var kids = node.children || [];
+    var isBranch = kids.length > 0;
+    var row = document.createElement('div');
+    row.className = 'arch-node' + (isBranch ? ' arch-branch-row' : ' arch-leaf-row');
+
+    var inner = '';
+    if (isBranch) {
+      inner += '<span class="arch-caret" aria-hidden="true"><i class="bi bi-caret-right-fill"></i></span>';
+    } else {
+      inner += '<span class="arch-caret arch-caret-blank" aria-hidden="true"></span>';
+    }
+    var ico = ICONS[node.type] || ICONS.leaf;
+    inner += '<i class="bi ' + ico[0] + ' ' + ico[1] + '" aria-hidden="true"></i>';
+    inner += '<span class="arch-name">' + esc(node.name) + '</span>';
+    if (node.desc) inner += '<span class="arch-desc">— ' + esc(node.desc) + '</span>';
+    if (isBranch) inner += '<span class="arch-badge">' + kids.length + '</span>';
+    row.innerHTML = inner;
+    li.appendChild(row);
+
+    if (isBranch) {
+      var ul = document.createElement('ul');
+      ul.className = 'arch-children';
+      kids.forEach(function (k) { ul.appendChild(buildNode(k, depth + 1, defaultDepth)); });
+      li.appendChild(ul);
+      li.classList.add('arch-branch');
+      if (depth >= defaultDepth) li.classList.add('collapsed');
+      row.addEventListener('click', function () { li.classList.toggle('collapsed'); });
+    }
+    return li;
+  }
+
+  function renderTree(key) {
+    var box = document.getElementById('tree-' + key);
+    var nodes = DATA[key] || [];
+    var defaultDepth = parseInt(box.getAttribute('data-depth') || '2', 10);
+    var root = document.createElement('ul');
+    root.className = 'arch-root';
+    nodes.forEach(function (n) { root.appendChild(buildNode(n, 1, defaultDepth)); });
+    box.innerHTML = '';
+    box.appendChild(root);
+  }
+
+  // 工具条：全部展开 / 全部折叠
+  document.querySelectorAll('.arch-toolbar .arch-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tree = document.getElementById('tree-' + btn.getAttribute('data-tree'));
+      if (!tree) return;
+      var collapse = btn.getAttribute('data-act') === 'collapse';
+      tree.querySelectorAll('li.arch-branch').forEach(function (li) {
+        li.classList.toggle('collapsed', collapse);
+      });
+    });
+  });
+
+  Object.keys(DATA).forEach(renderTree);
+})();
+</script>
+<script>
+(function () {
+  function getCookie(n){var v=null;document.cookie.split(';').forEach(function(c){var p=c.trim().split('=');if(p[0]===n)v=decodeURIComponent(p[1]);});return v;}
+  function csrf(){return {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')};}
+  function postJSON(url, data){return fetch(url,{method:'POST',headers:csrf(),body:JSON.stringify(data)}).then(function(r){return r.json();});}
+  var modalEl=document.getElementById('aiModal');
+  var modal=new bootstrap.Modal(modalEl);
+
+  function fillForm(p){
+    document.getElementById('aiF_id').value=p?p.id:'';
+    document.getElementById('aiF_name').value=p?p.name:'';
+    document.getElementById('aiF_type').value=p?p.type:'openai';
+    document.getElementById('aiF_model').value=p?p.model:'';
+    document.getElementById('aiF_base').value=p?p.base_url:'';
+    document.getElementById('aiF_key').value=''; // 出于安全不回显 key，留空表示不改
+    document.getElementById('aiF_enabled').checked=p?!!p.enabled:true;
+    document.getElementById('aiF_default').checked=p?!!p.is_default:false;
+  }
+
+  document.getElementById('aiAddBtn').addEventListener('click', function(){ fillForm(null); modal.show(); });
+
+  document.getElementById('aiProvTable').addEventListener('click', function(e){
+    var tr=e.target.closest('tr'); if(!tr) return;
+    var id=tr.getAttribute('data-id');
+    if(e.target.classList.contains('ai-edit')){
+      var tds=tr.children;
+      var rawName = (tr.getAttribute('data-name') || '').trim() || tds[0].textContent.replace('默认','').trim();
+      fillForm({id:id,name:rawName,type:tds[1].textContent.trim(),model:tds[2].textContent.trim(),base_url:tds[3].textContent.trim()});
+      modal.show();
+    } else if(e.target.classList.contains('ai-default')){
+      postJSON('/settings/ai/default/'+id+'/',{}).then(function(){location.reload();});
+    } else if(e.target.classList.contains('ai-del')){
+      if(confirm('确认删除该 AI 服务？')) postJSON('/settings/ai/delete/'+id+'/',{}).then(function(){location.reload();});
+    } else if(e.target.classList.contains('ai-test')){
+      e.target.disabled=true; var old=e.target.textContent; e.target.textContent='测试中…';
+      postJSON('/settings/ai/test/'+id+'/',{}).then(function(d){ alert((d.ok?'✅ 成功：':'❌ 失败：')+d.message); e.target.disabled=false; e.target.textContent=old; });
+    }
+  });
+
+  document.getElementById('aiF_save').addEventListener('click', function(){
+    var data={
+      id:document.getElementById('aiF_id').value,
+      name:document.getElementById('aiF_name').value,
+      type:document.getElementById('aiF_type').value,
+      model:document.getElementById('aiF_model').value,
+      base_url:document.getElementById('aiF_base').value,
+      api_key:document.getElementById('aiF_key').value,
+      enabled:document.getElementById('aiF_enabled').checked,
+      is_default:document.getElementById('aiF_default').checked,
+    };
+    postJSON('/settings/ai/save/',data).then(function(d){ if(d.ok){location.reload();} else {alert('保存失败');} });
+  });
+
+  document.getElementById('aiAskAllBtn').addEventListener('click', function(){
+    var q=document.getElementById('aiAskAllQ').value.trim()||'用一句话介绍你自己。';
+    var box=document.getElementById('aiAskAllResult');
+    box.innerHTML='<div class="text-muted small">并行请求中…</div>';
+    postJSON('/settings/ai/ask_all/',{system:'你是一个简洁的中文助手。',user:q}).then(function(d){
+      if(!d.ok){box.innerHTML='<div class="alert alert-warning small">请求失败</div>';return;}
+      var html='';
+      for(var name in d.results){
+        var ans=d.results[name]||'（无返回，可能未配置 Key 或网络不通）';
+        html+='<div class="border rounded p-2 mb-2"><div class="small fw-bold text-primary">'+name+'</div><div class="small">'+ans.replace(/</g,'&lt;')+'</div></div>';
+      }
+      box.innerHTML=html||'<div class="text-muted small">无可用的已启用服务</div>';
+    }).catch(function(){box.innerHTML='<div class="alert alert-danger small">网络错误</div>';});
+  });
+})();
+</script>
+<script>
+/* ---------------- 备份与迁移 ---------------- */
+(function () {
+  function getCookie(n){var v=null;document.cookie.split(';').forEach(function(c){var p=c.trim().split('=');if(p[0]===n)v=decodeURIComponent(p[1]);});return v;}
+  function csrf(){return {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')};}
+  function postJSON(url,data){return fetch(url,{method:'POST',headers:csrf(),body:JSON.stringify(data)}).then(function(r){return r.json();});}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function fmt(n){
+    n = Number(n)||0;
+    if(n < 1024) return n + ' B';
+    var u = ['KB','MB','GB','TB'], i = -1;
+    do { n /= 1024; i++; } while(n >= 1024 && i < u.length - 1);
+    return n.toFixed(n >= 100 ? 0 : (n >= 10 ? 1 : 2)) + ' ' + u[i];
+  }
+
+  var specsBox = document.getElementById('bk-specs');
+  if(!specsBox) return;
+  var SPECS = JSON.parse(specsBox.textContent);
+  var TITLES = {};
+  SPECS.forEach(function (s) { TITLES[s.kind] = s.title; });
+
+  function optionsOf(kind){
+    var o = {};
+    document.querySelectorAll('.bk-opt[data-kind="' + kind + '"]').forEach(function (cb) {
+      o[cb.getAttribute('data-key')] = cb.checked;
+    });
+    return o;
+  }
+
+  /* ---------- 范围预演 ---------- */
+  function renderPreview(kind){
+    var box = document.getElementById('pv-' + kind);
+    box.innerHTML = '<div class="bk-hint"><span class="spinner-border spinner-border-sm me-1"></span>正在统计文件与体积…</div>';
+    var qs = 'kind=' + encodeURIComponent(kind) + '&options=' + encodeURIComponent(JSON.stringify(optionsOf(kind)));
+    fetch('/settings/backup/preview/?' + qs)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if(!d.ok){
+          box.innerHTML = '<div class="alert alert-warning py-1 px-2 mb-0 bk-hint">' + esc(d.error || '统计失败') + '</div>' + btnHtml(kind);
+          return;
+        }
+        var h = '<div class="bk-prev-total"><b>' + d.files + '</b> 个文件 · <b>' + (d.dirs || 0) + '</b> 个目录 · 约 <b>' + fmt(d.bytes) + '</b>';
+        if(d.too_big) h += ' <span class="badge bg-danger">超过单包上限</span>';
+        h += '</div><table class="table table-sm bk-prev-table mb-1"><tbody>';
+        d.items.forEach(function (it) {
+          if(it.files === 0 && !it.missing) return;
+          h += '<tr><td>' + (it.missing ? '<span class="text-danger">路径缺失 </span>' : '') + esc(it.label) + '</td>' +
+               '<td class="text-end">' + it.files + '</td>' +
+               '<td class="text-end">' + fmt(it.bytes) + '</td></tr>';
+        });
+        h += '</tbody></table>';
+        if(d.db_note) h += '<div class="bk-hint">' + esc(d.db_note) + '</div>';
+        if(d.skeleton_dirs) h += '<div class="bk-hint">另含 ' + d.skeleton_dirs + ' 个空目录（保证解压后目录结构可用）</div>';
+        if(d.warnings && d.warnings.length){
+          h += '<div class="bk-hint text-warning">' + d.warnings.map(esc).join('；') + '</div>';
+        }
+        h += btnHtml(kind);
+        box.innerHTML = h;
+        bindPreviewButtons();
+      })
+      .catch(function (e) {
+        box.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-0 bk-hint">网络错误：' + esc(e) + '</div>' + btnHtml(kind);
+        bindPreviewButtons();
+      });
+  }
+
+  function btnHtml(kind){
+    return '<button class="btn btn-sm btn-outline-secondary bk-preview-btn mt-1" data-kind="' + kind + '">' +
+           '<i class="bi bi-arrow-clockwise"></i> 重新统计</button>';
+  }
+
+  function bindPreviewButtons(){
+    document.querySelectorAll('.bk-preview-btn').forEach(function (b) {
+      if(b.dataset.bound) return;
+      b.dataset.bound = '1';
+      b.addEventListener('click', function () { renderPreview(b.getAttribute('data-kind')); });
+    });
+  }
+  bindPreviewButtons();
+
+  // 勾选/取消「包含 ffmpeg」这类可选项后，若已做过预演则自动刷新统计
+  document.querySelectorAll('.bk-opt').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var kind = cb.getAttribute('data-kind');
+      var box = document.getElementById('pv-' + kind);
+      if(box && box.querySelector('.bk-prev-total')) renderPreview(kind);
+    });
+  });
+
+  /* ---------- 进度轮询 ---------- */
+  var timers = {};
+  function setBar(kind, pct, active){
+    var wrap = document.getElementById('pg-' + kind);
+    var bar = wrap.querySelector('.progress-bar');
+    wrap.classList.remove('d-none');
+    bar.classList.toggle('progress-bar-animated', !!active);
+    bar.classList.toggle('progress-bar-striped', !!active);
+    bar.classList.remove('bg-danger');
+    bar.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+  }
+  function setText(kind, txt){
+    var el = document.getElementById('pgtext-' + kind);
+    el.classList.remove('d-none');
+    el.textContent = txt;
+  }
+
+  function poll(id, kind){
+    if(timers[id]) return;
+    timers[id] = setTimeout(function tick(){
+      delete timers[id];
+      fetch('/settings/backup/status/' + id + '/')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if(!d.ok) return;
+          var j = d.job;
+          if(j.active){
+            setBar(kind, j.progress, true);
+            setText(kind, j.progress + '% · ' + (j.stage || '打包中'));
+            poll(id, kind);
+          } else {
+            setBar(kind, 100, false);
+            if(j.status === 'failed'){
+              document.querySelector('#pg-' + kind + ' .progress-bar').classList.add('bg-danger');
+              setText(kind, '失败：' + (j.message || '未知原因'));
+            } else {
+              setText(kind, '已完成 · ' + fmt(j.package_size) + ' · ' + j.file_count + ' 个文件' +
+                      (j.message ? '（' + j.message.replace(/\n/g, '；') + '）' : ''));
+            }
+            loadList();
+          }
+        })
+        .catch(function () { poll(id, kind); });
+    }, 1200);
+  }
+
+  /* ---------- 历史列表 ---------- */
+  function statusBadge(j){
+    var cls = j.status === 'done' ? 'success'
+            : j.status === 'failed' ? 'danger'
+            : j.status === 'running' ? 'primary' : 'secondary';
+    var extra = j.status === 'running' ? ' ' + j.progress + '%' : '';
+    return '<span class="badge bg-' + cls + '">' + esc(j.status_label) + extra + '</span>';
+  }
+
+  function loadList(){
+    fetch('/settings/backup/list/')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if(!d.ok) return;
+        var tb = document.getElementById('bkTableBody');
+        if(!tb) return;
+        if(!d.jobs.length){
+          tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">还没有备份记录</td></tr>';
+          return;
+        }
+        var h = '';
+        d.jobs.forEach(function (j) {
+          var ops = '';
+          if(j.status === 'done' && j.package_exists){
+            ops += '<a class="btn btn-sm btn-outline-primary me-1" href="/settings/backup/download/' + j.id + '/">' +
+                   '<i class="bi bi-download"></i> 下载</a>';
+          }
+          if(j.status === 'done' && !j.package_exists){
+            ops += '<span class="badge bg-warning text-dark me-1">包已不在磁盘</span>';
+          }
+          if(!j.active){
+            ops += '<button class="btn btn-sm btn-outline-danger bk-del" data-id="' + j.id + '">删除</button>';
+          }
+          h += '<tr>' +
+                 '<td>' + esc(j.kind_label) + '</td>' +
+                 '<td class="small">' + esc(j.package_filename || j.package_name || '—') + '</td>' +
+                 '<td>' + (j.package_size ? fmt(j.package_size) : '—') + '</td>' +
+                 '<td>' + (j.file_count || '—') + '</td>' +
+                 '<td class="small text-muted">' + esc(j.created) + '</td>' +
+                 '<td>' + statusBadge(j) + '</td>' +
+                 '<td class="text-end">' + ops + '</td>' +
+               '</tr>';
+          if(j.active){
+            setBar(j.kind, j.progress, true);
+            setText(j.kind, j.progress + '% · ' + (j.stage || '打包中'));
+            poll(j.id, j.kind);
+          }
+        });
+        tb.innerHTML = h;
+        tb.querySelectorAll('.bk-del').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if(!confirm('确认删除这份备份记录及其压缩包？此操作不可恢复。')) return;
+            postJSON('/settings/backup/delete/' + b.getAttribute('data-id') + '/', {}).then(function () { loadList(); });
+          });
+        });
+      })
+      .catch(function () { /* 列表拉取失败不影响其它操作 */ });
+  }
+
+  /* ---------- 启动备份 ---------- */
+  document.querySelectorAll('.bk-start').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var kind = btn.getAttribute('data-kind');
+      if(!confirm('确认执行「' + TITLES[kind] + '」？\n\n打包期间请保持本页打开，完成后可在下方「历史备份」下载。')) return;
+      btn.disabled = true;
+      postJSON('/settings/backup/start/', { kind: kind, options: optionsOf(kind) })
+        .then(function (d) {
+          btn.disabled = false;
+          if(!d.ok){ alert(d.error || '无法启动备份'); return; }
+          setBar(kind, 1, true);
+          setText(kind, '已受理，正在打包…');
+          poll(d.id, kind);
+        })
+        .catch(function () { btn.disabled = false; alert('网络错误，未能启动备份'); });
+    });
+  });
+
+  /* ---------- 打开备份目录 ---------- */
+  var revealBtn = document.getElementById('bkReveal');
+  if(revealBtn){
+    revealBtn.addEventListener('click', function () {
+      revealBtn.disabled = true;
+      postJSON('/settings/backup/reveal/', {}).then(function (d) {
+        revealBtn.disabled = false;
+        if(!d.ok) alert(d.error || '无法打开目录');
+      }).catch(function () { revealBtn.disabled = false; });
+    });
+  }
+
+  loadList();
+})();
+</script>
+{% endblock %}

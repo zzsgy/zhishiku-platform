@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}{{ book.title }} - 书架{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-book"></i> {{ book.title }}</h2>
+        <p class="text-muted small mb-0">{{ book.author|default:'—' }} · {{ book.category|default:'未分类' }}</p>
+        {% if book.source_url %}<p class="small mb-0"><i class="bi bi-link-45deg"></i> <a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a></p>{% endif %}
+      </div>
+  <a href="/bookshelf/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 书架</a>
+</div>
+
+{% comment %}
+  结构约束：批注台（aside）必须排在正文（article）**之前**（与 wiki_node.html 同理）。
+  正文可能极长，批注台一旦在 DOM 里落在正文之后，任何一次样式失效都会把它推到
+  正文末尾 —— 用户看到的就是「批注台被删除了」。宽屏的左右分栏由 theme.css 里
+  .kb-reader-main/-side 的 grid-column / grid-row 显式落位实现，不依赖 DOM 顺序。
+{% endcomment %}
+<div class="kb-reader">
+  <aside class="kb-reader-side" id="kbSidePanel" aria-label="批注台">
+    <!-- 批注台：读书笔记 / 阅读进度 / 本书金句。
+         ≥992px 与正文并排（显式落位到右列）并吸顶常驻；<992px 上移到正文之前，
+         保证任何视口、任何样式状态下都一眼可见。 -->
+    <div class="kb-side-head">
+      <i class="bi bi-journal-text"></i> 批注台
+      <span class="kb-side-head-tip">笔记 · 进度 · 金句</span>
+    </div>
+
+    <!-- 读书笔记（右侧边栏，阅读时随时查看与编辑） -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span><i class="bi bi-pencil-square"></i> 读书笔记（<span id="kbNoteCount">{{ notes|length }}</span>）</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/bookshelf/book/{{ book.pk }}/note/" class="row g-2 mb-3">
+          {% csrf_token %}
+          <div class="col-4"><input name="location" class="form-control form-control-sm" placeholder="位置/页码"></div>
+          <div class="col-8"><input name="note" class="form-control form-control-sm" placeholder="写下你的想法…" required></div>
+          <div class="col-12"><button class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-lg"></i> 添加笔记</button></div>
+        </form>
+        <ul class="list-group list-group-flush kb-note-list" id="kbNoteList">
+          {% for n in notes %}
+          <li class="list-group-item">
+            <div class="small text-muted">{% if n.location %}📍 {{ n.location }} · {% endif %}{{ n.created|date:'m-d H:i' }}</div>
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="flex-fill">{{ n.note }}</div>
+              <button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="note" data-id="{{ n.pk }}" title="删除笔记"><i class="bi bi-trash"></i></button>
+            </div>
+          </li>
+          {% empty %}<li class="list-group-item text-muted small kb-note-empty">还没有笔记。选中正文文字可快速「记笔记」。</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- 进度 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="card-title small">阅读进度</h6>
+        <form method="post" action="/bookshelf/book/{{ book.pk }}/progress/">
+          {% csrf_token %}
+          <div class="d-flex align-items-center gap-2">
+            <input type="range" name="progress" min="0" max="{{ book.total_pages|default:100 }}" value="{{ book.progress }}" class="form-range flex-fill" oninput="pv.value=this.value">
+            <output id="pv">{{ book.progress }}</output>
+          </div>
+          <button class="btn btn-sm btn-outline-primary mt-2 w-100">更新进度</button>
+        </form>
+        <div class="progress mt-2" style="height:6px;">
+          <div class="progress-bar" style="width:{% widthratio book.progress book.total_pages 100 %}%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 金句 -->
+    <div class="card shadow-sm">
+      <div class="card-header small fw-semibold"><i class="bi bi-quote"></i> 本书金句（<span id="kbGoldenCount">{{ goldens|length }}</span>）</div>
+      <ul class="list-group list-group-flush" id="kbGoldenList">
+        {% for g in goldens %}<li class="list-group-item"><div class="d-flex justify-content-between align-items-start gap-2"><div class="flex-fill"><i class="bi bi-quote text-warning"></i> {{ g.text }}</div><button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="golden" data-id="{{ g.pk }}" title="删除金句"><i class="bi bi-trash"></i></button></div></li>
+        {% empty %}<li class="list-group-item text-muted small kb-golden-empty">划句时选「存金句」即可收录。</li>{% endfor %}
+      </ul>
+    </div>
+  </aside>
+
+  <article class="kb-reader-main">
+    <!-- 阅读正文 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span>正文</span>
+        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
+      </div>
+      <div class="card-body">
+        {% if body %}<article class="kb-prose">{{ body|safe }}</article>
+        {% else %}<p class="text-muted">该书暂无可在线阅读的正文。
+        {% if book.source_url %}来源链接：<a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a>
+        <form method="post" action="/bookshelf/book/{{ book.pk }}/retry/" class="d-inline ms-1">
+          {% csrf_token %}<button class="btn btn-sm btn-outline-secondary py-0">重新抓取</button>
+        </form>
+        {% endif %}你仍可在右侧写笔记、管理进度、收录金句。</p>{% endif %}
+      </div>
+    </div>
+  </article>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>window.KB_BOOK_ID = {{ book.pk }}; window.KB_BOOK_TITLE = "{{ book.title|escapejs }}";</script>
+<script src="{% vstatic 'js/selection.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}WiKI 层 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="bi bi-journal-richtext"></i> WiKI 层</h2>
+  <a href="/wiki/create/" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 新建知识页</a>
+</div>
+<p class="text-muted small">自生长知识。正文使用 <code>[[标题]]</code> 建立双向链接，系统自动生成反向链接。阅读时可划句「问 AI / 存灵感 / 存金句」。新建或修改节点时可选择「父节点」构建知识树（共 {{ total }} 个节点）。</p>
+
+{% if roots %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    {% include 'wiki_tree.html' with nodes=roots depth=0 %}
+  </div>
+</div>
+{% else %}
+<div class="alert alert-light">还没有知识页，点右上角「新建知识页」开始记录。</div>
+{% endif %}
+{% endblock %}

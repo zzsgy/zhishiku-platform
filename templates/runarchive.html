@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}运行档案 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="bi bi-clock-history"></i> 运行档案</h2>
+  <span class="text-muted small">系统搭建与运行档案（操作流水 + 平台搭建文档），自动采集</span>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="card shadow-sm">
+      <div class="card-header small fw-semibold">按模块</div>
+      <div class="card-body p-2">
+        <a href="/runarchive/" class="btn btn-sm w-100 text-start {% if not module %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部</a>
+        {% for m in modules %}
+        <a href="/runarchive/?module={{ m.module|urlencode }}" class="btn btn-sm w-100 text-start mt-1 {% if module == m.module %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+          {{ m.module }} <span class="text-muted small">{{ m.label }}</span> <span class="badge bg-light text-dark float-end">{{ m.c }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    <form class="d-flex gap-2 mb-3" method="get" action="/runarchive/">
+      {% if module %}<input type="hidden" name="module" value="{{ module }}">{% endif %}
+      <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="搜索操作明细…">
+      <button class="btn btn-primary"><i class="bi bi-search"></i></button>
+    </form>
+    <div class="d-flex gap-2 mb-2">
+      <a class="btn btn-sm btn-outline-secondary" href="/runarchive/export/csv/?module={{ module|urlencode }}&amp;q={{ q|urlencode }}"><i class="bi bi-file-earmark-spreadsheet"></i> 导出 CSV</a>
+      <a class="btn btn-sm btn-outline-secondary" href="/runarchive/export/md/?module={{ module|urlencode }}&amp;q={{ q|urlencode }}"><i class="bi bi-markdown"></i> 导出 Markdown</a>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>时间</th><th>模块</th><th>动作</th><th>明细</th></tr></thead>
+          <tbody>
+            {% for l in logs %}
+            <tr>
+              <td class="small text-muted">{{ l.created|date:'m-d H:i:s' }}</td>
+              <td><span class="badge bg-light text-dark">{{ l.module }}</span></td>
+              <td class="small">{{ l.action }}</td>
+              <td class="small">
+                <div class="text-muted">{{ l.detail }}</div>
+                <div class="text-primary" style="font-size:.78rem"><i class="bi bi-lightbulb"></i> {{ l.explain }}</div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-4">暂无记录</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,726 @@
+{% extends 'base.html' %}
+{% load kb_extras %}
+{% block title %}知识收集 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-collection"></i> 知识收集</h2>
+  <span class="text-muted small">本地导入 · 网页解析 · 视频转图文 · 图片上传</span>
+</div>
+
+{% for m in messages %}
+<div class="alert alert-{% if m.level_tag == 'error' %}danger{% elif m.level_tag == 'warning' %}warning{% elif m.level_tag == 'success' %}success{% else %}info{% endif %} py-2 small" role="alert">
+  <i class="bi bi-info-circle"></i> {{ m }}
+</div>
+{% endfor %}
+
+<div class="row g-3">
+  <!-- 本地导入 -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold"><i class="bi bi-upload"></i> 本地导入</div>
+      <div class="card-body">
+        <p class="text-muted small">支持 Word / PDF / Markdown / TXT / PPT / 图片（图片自动 OCR，需本机安装 Tesseract）。</p>
+        <form id="localImportForm" method="post" enctype="multipart/form-data" action="/collection/import_local/">
+          {% csrf_token %}
+          <div class="mb-2">
+            <input type="file" name="file" id="localImportFile" class="form-control form-control-sm" required>
+          </div>
+          <input type="text" name="title" class="form-control form-control-sm" placeholder="自定义标题（可选）">
+          <input type="hidden" name="office_cat" id="officeCatInput" value="">
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button class="btn btn-primary btn-sm"><i class="bi bi-cloud-upload"></i> 导入并解析</button>
+            <!-- 弹窗由脚本控制（可先校验是否已选文件），故不使用 data-bs-toggle -->
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnToOffice">
+              <i class="bi bi-briefcase"></i> 存入办公平台
+            </button>
+          </div>
+          <div class="text-muted small mt-2">「导入并解析」写入知识库；「存入办公平台」按工作分类归入办公平台的「工作文件目录」。</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 网页解析 / 链接库录入（合并） -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold"><i class="bi bi-globe2"></i> 网页解析</div>
+      <div class="card-body">
+        <p class="text-muted small">粘贴链接：点「解析并入库」先尝试解析，失败自动进链接库；或点「录入链接库」直接归档。</p>
+        <div class="mb-2">
+          <input type="url" id="webUrl" class="form-control form-control-sm" placeholder="粘贴网页链接 https://...">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-7"><input type="text" id="webTitle" class="form-control form-control-sm" placeholder="标题（可选）"></div>
+          <div class="col-5">
+            <!-- 类型（合并原「平台」「来源」「类型」三个下拉）：选公众号/B站按对应平台解析；
+                 来源由本入口性质自动记录，不再让用户手选 -->
+            <select id="webLinkType" class="form-select form-select-sm" title="类型">
+              <option value="auto">自动识别</option>
+              {% for v, l in link_type_choices %}{% if v != 'unknown' %}<option value="{{ v }}" {% if v == 'webpage' %}selected{% endif %}>{{ l }}</option>{% endif %}{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button id="btnParse" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-cloud-download"></i> 解析并入库</button>
+          <button id="btnLink" class="btn btn-outline-secondary btn-sm flex-fill"><i class="bi bi-link-45deg"></i> 录入链接库</button>
+        </div>
+        <div id="webMsg" class="small mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 视频转图文 -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold"><i class="bi bi-camera-reels"></i> 视频转图文</div>
+      <div class="card-body">
+        <p class="text-muted small">抖音 / 优酷 / 爱奇艺 / B站 等：自动下载 → 语音转写 → 重点截图 → <b>AI 智能摘要</b> 入库。大视频处理较慢，请耐心等待页面返回。</p>
+        <form method="post" action="/collection/parse_video/">
+          {% csrf_token %}
+          <input type="url" name="url" class="form-control form-control-sm mb-2" placeholder="粘贴视频链接 https://..." required>
+          <button class="btn btn-primary btn-sm"><i class="bi bi-camera-reels"></i> 转图文并入库</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片上传与截图粘贴 -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold"><i class="bi bi-images"></i> 图片上传</div>
+      <div class="card-body">
+        <p class="text-muted small">本地上传 / 拖拽图片 / 直接 Ctrl+V 粘贴截图，自动整理为知识节点。</p>
+        <form id="imgForm" method="post" enctype="multipart/form-data" action="/collection/import_image/">
+          {% csrf_token %}
+          <div id="imgDropZone" class="img-drop-zone" tabindex="0" title="点击选择图片，或直接粘贴截图">
+            <i class="bi bi-cloud-arrow-up img-drop-icon"></i>
+            <div class="small fw-semibold">点击选择图片，或将截图 Ctrl+V 粘贴到此处</div>
+            <div class="text-muted small mt-1" id="imgFileName">未选择图片</div>
+          </div>
+          <input type="file" name="image" id="imgInput" accept="image/*" hidden>
+          <input type="text" name="title" class="form-control form-control-sm mt-2" placeholder="标题（可选）">
+          <button class="btn btn-primary btn-sm w-100 mt-2"><i class="bi bi-cloud-upload"></i> 上传并入库</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 知识收集 · 导入实时状态
+   所有导入入口统一改用 fetch 提交：受理瞬间即在「最近收集」顶部插入「进行中」行，
+   处理结束原地更新为「已完成 / 失败」并附结果说明，全程不刷新整页。
+   服务端同时会先落一条 pending 记录，故导入期间刷新页面也能看到该任务仍在进行。 */
+(function () {
+  'use strict';
+  var KIND_LABELS = {local: '本地导入', web: '网页解析', video: '视频转图文',
+                     text: '文本输入', image: '图片上传', office: '存入办公平台'};
+  // 重要：本脚本块位于「最近收集」表格与「存入办公平台」弹窗 *之前*，
+  // 此刻这些 DOM 尚未被解析出来，立即 getElementById 只会拿到 null /
+  // 空集合（状态行插不进、按钮事件绑不上）。故此处只声明占位，
+  // 真正的取元素放在 DOMContentLoaded 后的 initCollectLive() 里。
+  var rowsEl = null, barEl = null, barTextEl = null;
+  var active = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function stamp(d) {
+    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' '
+      + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  var toastEl = null, toastTimer = null;
+  function toast(msg, type) {
+    if (!msg) return;
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'kb-toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.style.background = type === 'ok' ? '#16a34a'
+      : type === 'err' ? '#dc2626'
+      : type === 'warn' ? '#d97706' : '#2563eb';
+    toastEl.classList.add('show');
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  }
+
+  function refreshBar() {
+    if (!barEl) return;
+    if (active > 0) {
+      barEl.classList.remove('d-none');
+      if (barTextEl) barTextEl.textContent = '正在处理 ' + active + ' 项导入';
+    } else {
+      barEl.classList.add('d-none');
+    }
+  }
+  function dropEmptyRow() {
+    var e = document.getElementById('collectEmpty');
+    if (e && e.parentNode) e.parentNode.removeChild(e);
+  }
+
+  // 受理：插入「进行中」行（带滚动进度条 + 已用时计时）
+  function begin(opt) {
+    opt = opt || {};
+    if (!rowsEl) return null;
+    dropEmptyRow();
+    var startedAt = Date.now();
+    var tr = document.createElement('tr');
+    tr.className = 'collect-row is-pending';
+    tr.dataset.status = 'pending';
+    tr.innerHTML =
+      '<td><span class="badge bg-secondary">' + esc(KIND_LABELS[opt.kind] || opt.kind || '导入') + '</span></td>'
+      + '<td><div class="collect-title">' + esc(opt.title || '未命名') + '</div>'
+      + '<div class="small text-muted collect-note">' + esc(opt.hint || '正在处理…') + '</div></td>'
+      + '<td class="collect-status">'
+      + '<span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>进行中</span>'
+      + '<div class="progress collect-progress mt-1"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div></div>'
+      + '<div class="small text-muted collect-elapsed">已用时 0 秒</div></td>'
+      + '<td class="small text-truncate collect-src" style="max-width:260px;" title="' + esc(opt.url || '') + '">'
+      + esc(opt.url || '—') + '</td>'
+      + '<td class="small text-muted">' + stamp(new Date()) + '</td>';
+    rowsEl.insertBefore(tr, rowsEl.firstChild);
+    active += 1;
+    refreshBar();
+
+    var timer = window.setInterval(function () {
+      var el = tr.querySelector('.collect-elapsed');
+      if (el) el.textContent = '已用时 ' + Math.round((Date.now() - startedAt) / 1000) + ' 秒';
+    }, 1000);
+
+    function release() {
+      window.clearInterval(timer);
+      active = Math.max(0, active - 1);
+      refreshBar();
+      tr.classList.remove('is-pending');
+    }
+
+    return {
+      el: tr,
+      // 收口：改为 已完成 / 失败，并显示结果说明
+      settle: function (res) {
+        release();
+        // 以服务端 status 为准（done / failed），无 status 时退回 ok 判定
+        var ok = (res && res.status) ? (res.status === 'done') : !!(res && res.ok);
+        tr.dataset.status = ok ? 'done' : 'failed';
+        if (res && res.id) tr.dataset.ci = res.id;
+        var td = tr.querySelector('.collect-status');
+        if (td) {
+          td.innerHTML = '<span class="badge ' + (ok ? 'bg-success' : 'bg-danger') + '">'
+            + (ok ? '已完成' : '失败') + '</span>';
+        }
+        if (res && res.title) {
+          var tEl = tr.querySelector('.collect-title');
+          if (tEl) tEl.textContent = res.title;
+        }
+        var noteEl = tr.querySelector('.collect-note');
+        if (noteEl) {
+          noteEl.textContent = (res && res.message) || (ok ? '处理完成' : '处理失败');
+          noteEl.className = 'small collect-note ' + (ok ? 'text-muted' : 'text-danger');
+        }
+        if (res && res.source_url) {
+          var src = tr.querySelector('.collect-src');
+          if (src) { src.textContent = res.source_url; src.title = res.source_url; }
+        }
+        tr.classList.add(ok ? 'is-done' : 'is-error');
+        toast((ok ? '✓ ' : '✗ ') + ((res && res.message) || (ok ? '导入完成' : '导入失败')),
+              ok ? 'ok' : 'err');
+      },
+      // 撤销：请求未进入处理（如未选文件），移除临时行
+      drop: function (msg) {
+        release();
+        if (tr.parentNode) tr.parentNode.removeChild(tr);
+        if (msg) toast(msg, 'err');
+      }
+    };
+  }
+
+  function setBusy(scope, on) {
+    if (!scope || !scope.querySelectorAll) return;
+    var btns = scope.querySelectorAll('button, input[type=submit]');
+    for (var i = 0; i < btns.length; i++) { btns[i].disabled = on; }
+  }
+
+  // 统一提交：fetch(FormData) → 按返回更新「进行中」行
+  function submit(o) {
+    if (!o || !o.form) { toast('页面表单未就绪，请刷新后重试', 'err'); return Promise.resolve({ok: false}); }
+    var handle = begin({kind: o.kind, title: o.title, hint: o.hint, url: o.url || ''});
+    var scope = o.form;
+    var fd = new FormData(o.form);
+    fd.append('_ajax', '1');
+    if (o.extra) {
+      for (var k in o.extra) {
+        if (Object.prototype.hasOwnProperty.call(o.extra, k)) fd.append(k, o.extra[k]);
+      }
+    }
+    setBusy(scope, true);
+    return fetch(o.url, {
+      method: 'POST',
+      body: fd,
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    }).then(function (r) {
+      return r.json().catch(function () {
+        return {ok: false, status: 'failed', message: '服务器返回异常（HTTP ' + r.status + '）'};
+      });
+    }).then(function (d) {
+      setBusy(scope, false);
+      d = d || {ok: false, message: '无响应内容'};
+      if (d.reject) {
+        if (handle) handle.drop(d.message);
+      } else {
+        if (handle) handle.settle(d);
+      }
+      if (o.onDone) o.onDone(d);
+      return d;
+    }).catch(function () {
+      setBusy(scope, false);
+      if (handle) handle.settle({ok: false, message: '网络请求失败，请确认本地服务是否在运行'});
+      return {ok: false};
+    });
+  }
+
+  // 轮询收敛：导入期间刷新 / 换标签页时，靠服务端状态快照把「进行中」更新为最终结果
+  var pollTimer = null;
+  function statusHtml(status) {
+    if (status === 'done') return '<span class="badge bg-success">已完成</span>';
+    if (status === 'pending') {
+      return '<span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1"'
+        + ' role="status" aria-hidden="true"></span>进行中</span>';
+    }
+    return '<span class="badge bg-danger">失败</span>';
+  }
+  function hasDomPending() {
+    if (!rowsEl) return false;
+    var rs = rowsEl.querySelectorAll('tr.collect-row');
+    for (var i = 0; i < rs.length; i++) {
+      if (rs[i].getAttribute('data-status') === 'pending') return true;
+    }
+    return false;
+  }
+  function applySnapshot(items) {
+    if (!rowsEl || !items || !items.length) return;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      // 只更新页面上已渲染的行（不新增），避免与本地临时行重复
+      var tr = rowsEl.querySelector('tr.collect-row[data-ci="' + it.id + '"]');
+      if (!tr || tr.getAttribute('data-status') === it.status) continue;
+      var wasPending = tr.getAttribute('data-status') === 'pending';
+      tr.setAttribute('data-status', it.status);
+      tr.classList.toggle('is-error', it.status === 'failed');
+      var td = tr.querySelector('.collect-status');
+      if (td) td.innerHTML = statusHtml(it.status);
+      if (it.title) {
+        var tEl = tr.querySelector('.collect-title');
+        if (tEl) tEl.textContent = it.title;
+      }
+      var noteEl = tr.querySelector('.collect-note');
+      if (noteEl && it.note) {
+        noteEl.textContent = it.note;
+        noteEl.className = 'small collect-note '
+          + (it.status === 'failed' ? 'text-danger' : 'text-muted');
+      }
+      if (wasPending && it.status !== 'pending') {
+        toast((it.status === 'done' ? '✓ ' : '✗ ') + (it.note || it.title),
+              it.status === 'done' ? 'ok' : 'err');
+      }
+    }
+    if (!hasDomPending() && pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+  function poll() {
+    fetch('/collection/api/recent/', {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok) applySnapshot(d.items); })
+      .catch(function () { /* 静默重试 */ });
+  }
+
+  // 对外暴露：本页「图片上传」「网页解析」两段脚本共用同一套实时状态通道。
+  // 此处只挂函数引用；对 DOM 的取值与事件绑定统一由 initCollectLive()
+  // 在 DOM 就绪后完成，避免因本脚本位置靠前而取不到元素。
+  window.CollectLive = {begin: begin, submit: submit, toast: toast, poll: poll};
+
+  // ---------------------------------------------------------------------
+  // 初始化：等 DOM 就绪后再取元素、绑事件
+  // ---------------------------------------------------------------------
+  function initCollectLive() {
+    rowsEl = document.getElementById('collectRows');
+    barEl = document.getElementById('collectLiveBar');
+    barTextEl = document.getElementById('collectLiveText');
+
+    var localForm = document.getElementById('localImportForm');
+    var localFileEl = document.getElementById('localImportFile');
+    var officeCatInput = document.getElementById('officeCatInput');
+    var officeCatMsg = document.getElementById('officeCatMsg');
+    var officeModalEl = document.getElementById('officeCatModal');
+
+    function hideOfficeModal() {
+      if (!officeModalEl || !window.bootstrap) return;
+      var inst = bootstrap.Modal.getInstance(officeModalEl);
+      if (inst) { inst.hide(); return; }
+      // 兜底：拿不到实例时手动收起，避免弹窗残留在屏幕上挡住状态行
+      officeModalEl.classList.remove('show');
+      officeModalEl.style.display = 'none';
+      officeModalEl.setAttribute('aria-hidden', 'true');
+      var bds = document.querySelectorAll('.modal-backdrop');
+      for (var i = 0; i < bds.length; i++) {
+        if (bds[i].parentNode) bds[i].parentNode.removeChild(bds[i]);
+      }
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+
+    // ① 本地导入 →「导入并解析」（写入知识库）
+    if (localForm) {
+      localForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!localFileEl || !localFileEl.files.length) {
+          toast('请先选择要导入的文件', 'err');
+          return;
+        }
+        CollectLive.submit({
+          form: localForm, url: '/collection/import_local/', kind: 'local',
+          title: localFileEl.files[0].name, hint: '正在解析并写入知识库…',
+          onDone: function (d) { if (d.ok) localForm.reset(); }
+        });
+      });
+    }
+
+    // ② 本地导入 →「存入办公平台」（按工作分类归档，不写入知识库）
+    // 「存入办公平台」按钮：先校验是否已选文件，再手动拉起弹窗
+    var btnToOffice = document.getElementById('btnToOffice');
+    if (btnToOffice) {
+      btnToOffice.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!localFileEl || !localFileEl.files.length) {
+          toast('请先在「本地导入」选择要存入办公平台的文件', 'err');
+          return;
+        }
+        if (officeCatMsg) officeCatMsg.textContent = '';
+        if (officeModalEl && window.bootstrap) {
+          var m = bootstrap.Modal.getInstance(officeModalEl) || new bootstrap.Modal(officeModalEl);
+          m.show();
+        }
+      });
+    }
+
+    // 分类按钮：用事件委托绑在 document 上。
+    // 弹窗内的按钮是本脚本之后才渲染出来的，逐个 querySelectorAll + 绑定
+    // 会得到空集合（此前「点击没反应」的根因）；委托则与渲染顺序无关。
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.office-cat-btn') : null;
+      if (!btn) return;
+      e.preventDefault();
+      if (!localFileEl || !localFileEl.files.length) {
+        if (officeCatMsg) officeCatMsg.textContent = '请先在「本地导入」选择要存入办公平台的文件。';
+        return;
+      }
+      if (officeCatMsg) officeCatMsg.textContent = '';
+      var label = (btn.textContent || '').trim();
+      var catKey = btn.getAttribute('data-cat') || '';
+      if (officeCatInput) officeCatInput.value = catKey;
+      hideOfficeModal();
+      CollectLive.submit({
+        form: localForm, url: '/collection/import_office/', kind: 'office',
+        title: localFileEl.files[0].name,
+        hint: '正在解析并存入办公平台「' + label + '」…',
+        onDone: function (d) { if (d.ok) localForm.reset(); }
+      });
+    });
+
+    // ③ 视频转图文（耗时最长，行内持续显示已用时）
+    var videoForm = document.querySelector('form[action="/collection/parse_video/"]');
+    if (videoForm) {
+      videoForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var urlEl = videoForm.querySelector('input[name="url"]');
+        var url = urlEl ? urlEl.value.trim() : '';
+        if (!url) { toast('请输入视频链接', 'err'); return; }
+        CollectLive.submit({
+          form: videoForm, url: '/collection/parse_video/', kind: 'video',
+          title: url, url: url,
+          hint: '正在下载视频、转写语音并生成图文（较慢，请保持页面打开）…',
+          onDone: function (d) { if (d.ok && urlEl) urlEl.value = ''; }
+        });
+      });
+    }
+
+    // ④ 页面加载时若仍有「进行中」的行（如导入期间刷新过页面），
+    //    开始轮询收敛其状态（此时表格已渲染，才查得到 pending 行）
+    if (hasDomPending()) {
+      pollTimer = window.setInterval(poll, 4000);
+    }
+  }
+
+  // DOM 就绪后再初始化（本脚本可能先于表格/弹窗执行）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCollectLive);
+  } else {
+    initCollectLive();
+  }
+})();
+</script>
+
+<style>
+  .collect-live-pill {
+    background: var(--kb-surface);
+    color: var(--kb-text);
+    border: 1px solid var(--kb-border) !important;
+  }
+  tr.collect-row.is-pending { background: rgba(37, 99, 235, .07); }
+  tr.collect-row.is-error { background: rgba(220, 38, 38, .06); }
+  .collect-title { color: var(--kb-text); font-weight: 500; }
+  .collect-note { max-width: 520px; }
+  .collect-progress { height: 4px; }
+  .collect-elapsed { font-variant-numeric: tabular-nums; }
+  .img-drop-zone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: .5rem;
+    padding: 1.25rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+    background: var(--bs-tertiary-bg);
+  }
+  .img-drop-zone:hover, .img-drop-zone:focus-visible, .img-drop-zone.is-dragover, .img-drop-zone.has-file {
+    border-color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+  }
+  .img-drop-zone.is-dragover { border-style: solid; }
+  .img-drop-icon { font-size: 1.75rem; color: var(--bs-primary); display: block; margin-bottom: .25rem; }
+  .img-drop-file { display: inline-flex; align-items: center; gap: .35rem; }
+</style>
+
+<script>
+  (function () {
+    var zone = document.getElementById('imgDropZone');
+    var input = document.getElementById('imgInput');
+    var label = document.getElementById('imgFileName');
+    var form = document.getElementById('imgForm');
+    if (!zone || !input) return;
+
+    function setFile(file) {
+      if (!file) return;
+      if (!/^image\//.test(file.type)) { alert('仅支持图片文件（jpg/png/bmp/gif/webp）。'); return; }
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      label.innerHTML = '<span class="img-drop-file"><i class="bi bi-file-earmark-image text-primary"></i>'
+        + file.name + '（' + Math.max(1, Math.round(file.size / 1024)) + ' KB）</span>';
+      zone.classList.add('has-file');
+    }
+
+    // 提交：走实时状态通道，「最近收集」显示 进行中 → 已完成 / 失败
+    function submitImage() {
+      if (!input.files || !input.files.length) { alert('请先选择或粘贴图片。'); return; }
+      CollectLive.submit({
+        form: form, url: '/collection/import_image/', kind: 'image',
+        title: input.files[0].name, hint: '正在保存图片并识别文字（OCR）…',
+        onDone: function (d) {
+          if (!d.ok) return;
+          input.value = '';
+          zone.classList.remove('has-file');
+          if (label) label.textContent = '未选择图片';
+        }
+      });
+    }
+    form.addEventListener('submit', function (e) { e.preventDefault(); submitImage(); });
+
+    // 点击选择本地图片
+    zone.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () {
+      if (input.files && input.files[0]) setFile(input.files[0]);
+    });
+
+    // 拖拽上传
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add('is-dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove('is-dragover'); });
+    });
+    zone.addEventListener('drop', function (e) {
+      var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) { setFile(file); submitImage(); }
+    });
+
+    // 剪贴板粘贴截图（整页监听，粘贴图片即上传）
+    document.addEventListener('paste', function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.indexOf('image/') === 0) {
+          var file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            if (!file.name || file.name === 'image.png') {
+              try { file = new File([file], '粘贴截图.png', { type: file.type }); } catch (err) {}
+            }
+            setFile(file);
+            submitImage();
+          }
+          return;
+        }
+      }
+    });
+  })();
+
+  // 网页解析 / 录入链接库（合并端点，两按钮共用存储逻辑 + 实时状态行）
+  (function () {
+    var urlEl = document.getElementById('webUrl');
+    var titleEl = document.getElementById('webTitle');
+    var typeEl = document.getElementById('webLinkType');
+    var btnParse = document.getElementById('btnParse');
+    var btnLink = document.getElementById('btnLink');
+    var msg = document.getElementById('webMsg');
+    if (!urlEl || !btnParse || !btnLink) return;
+
+    function setMsg(html, type) {
+      var cls = type === 'ok' ? 'text-success' : (type === 'warn' ? 'text-warning' : 'text-danger');
+      msg.innerHTML = '<span class="' + cls + '">' + html + '</span>';
+    }
+    function busy(on) {
+      btnParse.disabled = on; btnLink.disabled = on;
+      btnParse.innerHTML = on ? '<span class="spinner-border spinner-border-sm"></span> 处理中…' : '<i class="bi bi-cloud-download"></i> 解析并入库';
+      btnLink.innerHTML = on ? '<span class="spinner-border spinner-border-sm"></span> …' : '<i class="bi bi-link-45deg"></i> 录入链接库';
+    }
+    function postJSON(u, d) {
+      return fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(d)}).then(function (r) { return r.json(); });
+    }
+    function payload(mode) {
+      // 来源由服务端按入口性质自动记录；类型选公众号/B站时服务端自动按对应平台解析
+      return {url: urlEl.value.trim(), title: titleEl.value.trim(),
+              link_type: typeEl ? typeEl.value : 'auto', mode: mode};
+    }
+    btnParse.addEventListener('click', function () {
+      var url = urlEl.value.trim();
+      if (!url) { setMsg('请先粘贴网页链接', 'err'); return; }
+      busy(true);
+      var row = CollectLive.begin({kind: 'web', title: titleEl.value.trim() || url,
+                                   url: url, hint: '正在解析网页正文…'});
+      postJSON('/collection/link_action/', payload('parse'))
+        .then(function (d) {
+          busy(false);
+          if (!d.ok) {
+            setMsg(d.error || '操作失败', 'err');
+            if (row) row.drop(d.error || '操作失败');
+            return;
+          }
+          if (d.parsed) {
+            setMsg('✓ 已解析并写入知识库：' + (d.title || ''), 'ok');
+            if (row) row.settle(d);
+            urlEl.value = ''; titleEl.value = '';
+          } else if (d.archived) {
+            var why = d.reason ? ('（原因：' + d.reason + '）') : '';
+            setMsg('解析失败，已自动录入链接库' + why, 'warn');
+            if (row) row.settle({ok: false, status: 'failed', title: d.title,
+                                 message: d.message || ('解析失败，已录入链接库' + why)});
+            urlEl.value = ''; titleEl.value = '';
+          }
+        })
+        .catch(function () {
+          busy(false); setMsg('请求失败，请重试', 'err');
+          if (row) row.settle({ok: false, status: 'failed', message: '请求失败，请重试'});
+        });
+    });
+    btnLink.addEventListener('click', function () {
+      var url = urlEl.value.trim();
+      if (!url) { setMsg('请先粘贴网页链接', 'err'); return; }
+      busy(true);
+      var row = CollectLive.begin({kind: 'web', title: titleEl.value.trim() || url,
+                                   url: url, hint: '正在录入链接库…'});
+      postJSON('/collection/link_action/', payload('link'))
+        .then(function (d) {
+          busy(false);
+          if (!d.ok) {
+            setMsg(d.error || '录入失败', 'err');
+            if (row) row.drop(d.error || '录入失败');
+            return;
+          }
+          setMsg('✓ 已录入链接库', 'ok');
+          if (row) row.settle(d);
+          urlEl.value = ''; titleEl.value = '';
+        })
+        .catch(function () {
+          busy(false); setMsg('请求失败，请重试', 'err');
+          if (row) row.settle({ok: false, status: 'failed', message: '请求失败，请重试'});
+        });
+    });
+  })();
+</script>
+
+<!-- 「存入办公平台」分类选择弹窗 -->
+<div class="modal fade" id="officeCatModal" tabindex="-1" aria-labelledby="officeCatModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="officeCatModalLabel"><i class="bi bi-briefcase"></i> 存入办公平台</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">请选择该文件所属的工作分类，文件将解析后归入办公平台「工作文件目录」的对应分类（不写入知识库，也不改动原始文件）。</p>
+        <div class="d-grid gap-2">
+          {% for key, label in office_categories %}
+          <button type="button" class="btn btn-outline-primary text-start office-cat-btn" data-cat="{{ key }}">
+            <i class="bi bi-folder2-open"></i> {{ label }}
+          </button>
+          {% endfor %}
+        </div>
+        <div id="officeCatMsg" class="small text-danger mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h4 class="mt-5 mb-3 d-flex align-items-center flex-wrap gap-2">
+  <span>最近收集</span>
+  <span class="badge rounded-pill collect-live-pill d-none" id="collectLiveBar">
+    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+    <span id="collectLiveText"></span>
+  </span>
+  <span class="text-muted small fw-normal ms-auto">导入状态实时更新：进行中 → 已完成 / 失败</span>
+</h4>
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th style="width:120px;">类型</th>
+            <th>标题 / 结果</th>
+            <th style="width:180px;">状态</th>
+            <th style="width:260px;">来源 / 链接</th>
+            <th style="width:100px;">时间</th>
+          </tr>
+        </thead>
+        <tbody id="collectRows">
+          {% for it in items %}
+          <tr class="collect-row{% if it.status == 'failed' %} is-error{% endif %}" data-ci="{{ it.pk }}" data-status="{{ it.status }}">
+            <td><span class="badge bg-secondary">{{ kind_labels|get_item:it.kind }}</span></td>
+            <td>
+              <div class="collect-title">{{ it.title|default:'未命名' }}</div>
+              {% if it.note %}<div class="small collect-note {% if it.status == 'failed' %}text-danger{% else %}text-muted{% endif %}">{{ it.note }}</div>{% endif %}
+            </td>
+            <td class="collect-status">
+              {% if it.status == 'done' %}<span class="badge bg-success">已完成</span>
+              {% elif it.status == 'pending' %}<span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>进行中</span>
+              {% else %}<span class="badge bg-danger">失败</span>{% endif %}
+            </td>
+            <td class="small text-truncate collect-src" style="max-width:260px;" title="{{ it.source_url }}">{{ it.source_url|default:'—' }}</td>
+            <td class="small text-muted">{{ it.created|date:'m-d H:i' }}</td>
+          </tr>
+          {% empty %}
+          <tr id="collectEmpty"><td colspan="5" class="text-center text-muted py-4">暂无收集记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,203 @@
+{% load kb_extras %}<!DOCTYPE html>
+<html lang="zh-CN" data-theme="{{ theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ platform_name }}{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{% vstatic 'favicon.svg' %}">
+  <link href="{% vstatic 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% vstatic 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+  {% comment %}
+    主题样式必须带版本号（vstatic 会拼上文件 mtime）：URL 恒定不变时浏览器会
+    一直用内存缓存里的旧 CSS 且不再发请求，改完版式用户也看不到 —— 这是
+    「批注台明明修好了却显示被移除」的真因。详见 core/templatetags/kb_extras.py。
+  {% endcomment %}
+  <link href="{% vstatic 'css/theme.css' %}" rel="stylesheet">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <aside class="kb-sidebar" id="kbSidebar">
+    <div class="kb-sidebar-brand">
+      <span class="kb-brand-mark"><i class="bi bi-book-half"></i></span>
+      <span class="kb-brand-copy">
+        <strong>{{ platform_name }}</strong>
+        <small>个人知识工作台</small>
+      </span>
+      <button type="button" class="kb-sidebar-close" id="kbSidebarClose" aria-label="关闭导航">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <nav class="kb-sidebar-nav">
+      <div class="kb-nav-group-label">工作台</div>
+      <a class="kb-nav-item {% if active_module == 'dashboard' %}active{% endif %}" href="/" title="总览">
+        <i class="bi bi-house-door"></i>
+        <span>工作台</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'collection' %}active{% endif %}" href="/collection/" title="收集箱">
+        <i class="bi bi-inbox"></i>
+        <span>收集箱</span>
+      </a>
+
+      <div class="kb-nav-group-label">知识</div>
+      <a class="kb-nav-item {% if active_module == 'knowledgebase' %}active{% endif %}" href="/knowledgebase/" title="知识库">
+        <i class="bi bi-archive"></i>
+        <span>知识库</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'wiki' %}active{% endif %}" href="/wiki/" title="WiKI层">
+        <i class="bi bi-journal-richtext"></i>
+        <span>Wiki</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'precipitation' %}active{% endif %}" href="/wiki/precipitation/" title="待整理知识">
+        <i class="bi bi-funnel"></i>
+        <span>待整理</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'starmap' %}active{% endif %}" href="/starmap/" title="关系图谱">
+        <i class="bi bi-diagram-3"></i>
+        <span>关系图谱</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'bookshelf' %}active{% endif %}" href="/bookshelf/" title="书架">
+        <i class="bi bi-bookshelf"></i>
+        <span>书架</span>
+      </a>
+
+      <div class="kb-nav-group-label">创作与工作</div>
+      <a class="kb-nav-item {% if active_module == 'notes' %}active{% endif %}" href="/notes/" title="随笔记">
+        <i class="bi bi-pencil-square"></i>
+        <span>随笔记</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'selfmedia' %}active{% endif %}" href="/selfmedia/" title="自媒体">
+        <i class="bi bi-megaphone"></i>
+        <span>自媒体</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'office' %}active{% endif %}" href="/office/" title="办公平台">
+        <i class="bi bi-briefcase"></i>
+        <span>办公中心</span>
+      </a>
+
+      <div class="kb-nav-group-label">系统</div>
+      <a class="kb-nav-item {% if active_module == 'runarchive' %}active{% endif %}" href="/runarchive/" title="运行档案">
+        <i class="bi bi-clock-history"></i>
+        <span>活动记录</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'settings' %}active{% endif %}" href="/settings/" title="系统设置">
+        <i class="bi bi-gear"></i>
+        <span>系统设置</span>
+      </a>
+    </nav>
+
+    <div class="kb-sidebar-footer">
+      <button class="kb-theme-toggle" id="themeToggle" title="切换主题">
+        <i class="bi bi-circle-half"></i>
+        <span>主题</span>
+      </button>
+    </div>
+  </aside>
+  <button class="kb-sidebar-backdrop" id="kbSidebarBackdrop" type="button" aria-label="关闭导航"></button>
+
+  <main class="kb-main">
+    {% comment %}
+      全局顶栏：全网检索在所有页面常驻（吸顶），任意页面都能直接发起，无需先回到办公平台。
+      内层 .kb-topbar-inner 负责宽度（1440）与左右内边距（--kb-gutter），与正文容器同轴，
+      保证标题左边缘 == 正文卡片左边缘。
+      维护提示：本注释必须用 comment 块语法，不能用花括号井号的行内注释——
+      行内注释只支持单行，跨行写会原样输出成文本，在 .kb-main 这个 flex 容器里
+      变成匿名 flex 项，把顶栏整体推下约一行高（实测 24px）并在页面上显示注释原文。
+    {% endcomment %}
+    <div class="kb-topbar">
+      <div class="kb-topbar-inner">
+        <button type="button" class="kb-menu-toggle" id="kbMenuToggle" aria-label="打开导航">
+          <i class="bi bi-list"></i>
+        </button>
+        <span class="kb-topbar-title"><i class="bi bi-search"></i> 搜索</span>
+        <form class="kb-global-search" method="get" action="/office/search/" role="search">
+          <i class="bi bi-search kb-global-search-icon" aria-hidden="true"></i>
+          <input type="text" name="q" class="form-control form-control-sm" value="{{ global_search_q|default:'' }}"
+                 placeholder="搜索知识、文件或全网内容" aria-label="聚合检索关键词" required>
+          {% comment %}
+            范围选择器：知识库 / 办公平台 / 全网，支持单选 / 多选 / 全选（至少保留一项）。
+            选择随表单提交为 scopes 参数；auto-close=outside 让勾选多项时菜单不闪退。
+            注意：这里必须用 comment 块语法——花括号井号行内注释不支持跨行，
+            跨行会把注释原文输出成 flex 匿名项（实测把表单撑到 120px 高、输入框压成 169px 宽）。
+          {% endcomment %}
+          <div class="dropdown kb-scope-dd">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle kb-scope-btn" type="button"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                    title="选择搜索范围（可多选）">
+              <i class="bi bi-sliders"></i><span class="kb-scope-btn-label">范围</span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end kb-scope-menu p-2">
+              <div class="d-flex justify-content-between align-items-center kb-scope-head">
+                <span class="small text-muted">搜索范围</span>
+                <button type="button" class="btn btn-sm btn-link p-0 small" id="kbScopeAll">全选</button>
+              </div>
+              <label class="kb-scope-opt"><input type="checkbox" value="kb" checked><i class="bi bi-archive"></i>知识库</label>
+              <label class="kb-scope-opt"><input type="checkbox" value="office" checked><i class="bi bi-briefcase"></i>办公平台</label>
+              <label class="kb-scope-opt"><input type="checkbox" value="web" checked><i class="bi bi-globe2"></i>全网</label>
+            </div>
+          </div>
+          <input type="hidden" name="scopes" class="kb-scope-input" value="all">
+          <button class="btn btn-sm btn-primary kb-search-submit" type="submit"><i class="bi bi-search"></i><span>搜索</span></button>
+        </form>
+      </div>
+    </div>
+    <div class="kb-main-inner">
+      {% block content %}{% endblock %}
+    </div>
+    <footer class="kb-footer small">
+      {{ platform_name }} · 本地知识库平台 · Django 5.2
+    </footer>
+  </main>
+
+  <script src="{% vstatic 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+  <script src="{% vstatic 'js/theme.js' %}"></script>
+  <script>
+    (function () {
+      var sidebar = document.getElementById('kbSidebar');
+      var openBtn = document.getElementById('kbMenuToggle');
+      var closeBtn = document.getElementById('kbSidebarClose');
+      var backdrop = document.getElementById('kbSidebarBackdrop');
+      function closeNav() { sidebar.classList.remove('is-open'); document.body.classList.remove('kb-nav-open'); }
+      function openNav() { sidebar.classList.add('is-open'); document.body.classList.add('kb-nav-open'); }
+      if (openBtn) openBtn.addEventListener('click', openNav);
+      if (closeBtn) closeBtn.addEventListener('click', closeNav);
+      if (backdrop) backdrop.addEventListener('click', closeNav);
+      sidebar.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', closeNav); });
+    })();
+
+    /* 顶栏「范围」选择器：单选 / 多选 / 全选（至少保留一项），随表单提交 scopes 参数。
+       约定：三项全选时提交 scopes=all（URL 保持简洁）；结果页按 URL 的 scopes 回显勾选态，
+       改词再搜时组合自动保持。 */
+    (function () {
+      var form = document.querySelector('.kb-global-search');
+      if (!form) return;
+      var boxes = Array.prototype.slice.call(form.querySelectorAll('.kb-scope-opt input[type="checkbox"]'));
+      var hidden = form.querySelector('.kb-scope-input');
+      var label = form.querySelector('.kb-scope-btn-label');
+      var allBtn = document.getElementById('kbScopeAll');
+      var NAMES = { kb: '知识库', office: '办公平台', web: '全网' };
+      function sync() {
+        if (!boxes.some(function (b) { return b.checked; })) boxes[0].checked = true; // 至少一项
+        var on = boxes.filter(function (b) { return b.checked; });
+        var isAll = on.length === boxes.length;
+        hidden.value = isAll ? 'all' : on.map(function (b) { return b.value; }).join(',');
+        if (label) label.textContent = isAll ? '全部范围'
+          : (on.length === 1 ? NAMES[on[0].value] : '已选 ' + on.length + ' 项');
+      }
+      boxes.forEach(function (b) { b.addEventListener('change', sync); });
+      if (allBtn) allBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        boxes.forEach(function (b) { b.checked = true; });
+        sync();
+      });
+      var cur = new URLSearchParams(location.search).get('scopes');
+      if (cur && cur !== 'all') {
+        var want = cur.split(',');
+        boxes.forEach(function (b) { b.checked = want.indexOf(b.value) !== -1; });
+      }
+      sync();
+    })();
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

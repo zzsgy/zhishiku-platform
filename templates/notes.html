@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}随笔记 - {{ platform_name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h2 class="mb-0"><i class="bi bi-pencil-square"></i> 随笔记</h2>
+      <span class="text-muted small">一条输入框，分别记入三个库</span>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small text-muted mb-1">标题（可选）</label>
+            <input type="text" id="noteTitle" class="form-control form-control-sm" placeholder="为这条笔记起个标题">
+          </div>
+          <div class="col-6">
+            <label class="form-label small text-muted mb-1">来源（可选）</label>
+            <input type="text" id="noteSource" class="form-control form-control-sm" placeholder="如 某书 / 某文 / 网页">
+          </div>
+        </div>
+        <label class="form-label small fw-semibold">内容</label>
+        <textarea id="noteText" class="form-control" rows="8" placeholder="此刻的灵感、想摘的金句、要沉淀的知识……一个输入框搞定"></textarea>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button class="btn btn-outline-primary" data-target="insp" onclick="sendTo(this)"><i class="bi bi-lightbulb"></i> 记入灵感</button>
+          <button class="btn btn-outline-warning" data-target="gold" onclick="sendTo(this)"><i class="bi bi-quote"></i> 录入金句</button>
+          <button class="btn btn-outline-success" data-target="kb" onclick="sendTo(this)"><i class="bi bi-archive"></i> 保存知识库</button>
+        </div>
+        <div id="noteStatus" class="small text-muted mt-2">&nbsp;</div>
+      </div>
+    </div>
+
+    <!-- 记入历史 -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header bg-white small fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clock-history"></i> 记入历史（<span id="logCount">{{ logs|length }}</span>）</span>
+        <span class="text-muted fw-normal">按时间倒序 · 最新在上</span>
+      </div>
+      <ul id="logList" class="list-group list-group-flush" style="max-height:52vh; overflow:auto;">
+        {% for log in logs %}
+        <li class="list-group-item note-log-item">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="flex-fill" style="white-space:pre-wrap; word-break:break-word;">{{ log.text }}</div>
+            <a href="{% if log.target == 'insp' %}/inspiration/{% elif log.target == 'gold' %}/knowledgebase/golden/{% else %}/knowledgebase/{% endif %}"
+               class="note-log-go flex-shrink-0 text-decoration-none"
+               title="进入{{ log.get_target_display }}">进入{{ log.get_target_display }} <i class="bi bi-arrow-right-short"></i></a>
+          </div>
+          <div class="small text-muted mt-1">
+            <span class="note-log-badge note-log-badge--{{ log.target }}"><i class="bi {% if log.target == 'insp' %}bi-lightbulb{% elif log.target == 'gold' %}bi-quote{% else %}bi-archive{% endif %}"></i> {{ log.get_target_display }}</span>
+            <span class="ms-2"><i class="bi bi-clock"></i> {{ log.created|date:'m-d H:i' }}</span>
+          </div>
+        </li>
+        {% empty %}
+        <li class="list-group-item note-log-empty text-muted small" id="logEmpty">
+          还没有记入记录，在上方输入并选择一个库保存后，这里会显示历史。
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="text-end mt-2">
+      <a href="/inspiration/" class="small text-decoration-none"><i class="bi bi-list-ul"></i> 查看已记灵感 →</a>
+    </div>
+  </div>
+</div>
+
+<style>
+.note-log-item { border-left: 3px solid var(--bs-border-color); border-radius: 8px; margin: 8px 10px; transition: all .15s ease; }
+.note-log-item:hover { border-left-color: #2563eb; background: #f8fafc; }
+.note-log-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .75rem; background: #eef2f7; color: #475569; }
+.note-log-badge--insp { background: #e0edff; color: #1d4ed8; }
+.note-log-badge--gold { background: #fdf3d7; color: #a16207; }
+.note-log-badge--kb   { background: #dcf5e7; color: #15803d; }
+.note-log-go { font-size: .8rem; color: #2563eb; white-space: nowrap; opacity: .85; }
+.note-log-go:hover { opacity: 1; }
+</style>
+
+<script>
+function getCookie(name){
+  const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return m ? decodeURIComponent(m[2]) : '';
+}
+const TARGET_META = {
+  insp: {label: '灵感库', icon: 'bi-lightbulb', href: '/inspiration/'},
+  gold: {label: '金句库', icon: 'bi-quote',   href: '/knowledgebase/golden/'},
+  kb:   {label: '知识库', icon: 'bi-archive', href: '/knowledgebase/'}
+};
+function prependLog(target, text, timeStr){
+  const meta = TARGET_META[target];
+  const empty = document.getElementById('logEmpty');
+  if(empty) empty.remove();
+  const list = document.getElementById('logList');
+  const li = document.createElement('li');
+  li.className = 'list-group-item note-log-item';
+  const esc = document.createElement('div');
+  esc.textContent = text;
+  li.innerHTML =
+    '<div class="d-flex justify-content-between align-items-start gap-2">' +
+      '<div class="flex-fill" style="white-space:pre-wrap; word-break:break-word;"></div>' +
+      '<a href="' + meta.href + '" class="note-log-go flex-shrink-0 text-decoration-none" title="进入' + meta.label + '">进入' + meta.label + ' <i class="bi bi-arrow-right-short"></i></a>' +
+    '</div>' +
+    '<div class="small text-muted mt-1">' +
+      '<span class="note-log-badge note-log-badge--' + target + '"><i class="bi ' + meta.icon + '"></i> ' + meta.label + '</span>' +
+      '<span class="ms-2"><i class="bi bi-clock"></i> ' + timeStr + '</span>' +
+    '</div>';
+  li.querySelector('.flex-fill').textContent = text;
+  list.insertBefore(li, list.firstChild);
+  const cnt = document.getElementById('logCount');
+  cnt.textContent = parseInt(cnt.textContent || '0', 10) + 1;
+}
+async function sendTo(btn){
+  const ta = document.getElementById('noteText');
+  const text = ta.value.trim();
+  const title = (document.getElementById('noteTitle').value || '').trim();
+  const source = (document.getElementById('noteSource').value || '').trim();
+  const status = document.getElementById('noteStatus');
+  if(!text){ status.textContent = '请先输入内容再保存'; status.className = 'small text-danger mt-2'; return; }
+  const target = btn.dataset.target;
+  let url, headers = {}, body;
+  if(target === 'insp'){
+    url = '/inspiration/api/add/'; headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({text: text, source: source});
+  } else if(target === 'gold'){
+    url = '/bookshelf/api/golden/'; headers['Content-Type'] = 'application/json';
+    body = JSON.stringify({text: text, source: source});
+  } else {
+    url = '/collection/input_text/';
+    headers['X-CSRFToken'] = getCookie('csrftoken');
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = 'text=' + encodeURIComponent(text) +
+           '&title=' + encodeURIComponent(title || '随笔记');
+  }
+  btn.disabled = true;
+  try{
+    const r = await fetch(url, {method: 'POST', headers: headers, body: body});
+    let ok = true, msg = '';
+    if(target === 'kb'){
+      ok = r.ok; msg = ok ? '已保存到知识库' : '保存知识库失败';
+    } else {
+      const j = await r.json().catch(() => ({ok: false}));
+      ok = j.ok; msg = ok ? (target === 'insp' ? '已记入灵感' : '已录入金句') : (j.error || '操作失败');
+    }
+    status.textContent = msg;
+    status.className = 'small mt-2 ' + (ok ? 'text-success' : 'text-danger');
+    if(ok){
+      ta.value = '';
+      document.getElementById('noteTitle').value = '';
+      document.getElementById('noteSource').value = '';
+      // 记入历史：落库 + 实时前插
+      try{
+        const lr = await fetch('/notes/api/log/', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+          body: JSON.stringify({target: target, text: text})
+        });
+        const lj = await lr.json().catch(() => ({ok: false}));
+        prependLog(target, text, lj.ok ? lj.time : new Date().toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}));
+      }catch(_){ /* 历史记录失败不影响主流程 */ }
+    }
+  }catch(e){
+    status.textContent = '请求出错：' + e.message;
+    status.className = 'small text-danger mt-2';
+  }finally{ btn.disabled = false; }
+}
+</script>
+{% endblock %}

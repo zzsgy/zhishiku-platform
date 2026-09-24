@@ -1,0 +1,12 @@
+<ul class="kb-tree">
+  {% for item in nodes %}
+  <li>
+    {% if item.type == 'dir' %}
+      <i class="bi bi-folder2 text-warning"></i> <span class="kb-dir">{{ item.name }}</span>
+      {% if item.children %}{% include '_tree.html' with nodes=item.children %}{% endif %}
+    {% else %}
+      <i class="bi bi-file-earmark text-secondary"></i> <span class="kb-file">{{ item.name }}</span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
