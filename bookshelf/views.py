@@ -151,7 +151,8 @@ def _read_book_body(book):
             from docx import Document
             doc = Document(fp)
             lines = [para.text for para in doc.paragraphs if para.text.strip()]
-            return f'<pre class="kb-prose">{"\n".join(lines)}</pre>'
+            content = '\n'.join(lines)
+            return f'<pre class="kb-prose">{content}</pre>'
         if p.endswith('.xlsx'):
             import openpyxl
             wb = openpyxl.load_workbook(fp, read_only=True, data_only=True)
@@ -160,7 +161,8 @@ def _read_book_body(book):
                 out.append(f'# {ws.title}')
                 for row in ws.iter_rows(values_only=True):
                     out.append('\t'.join('' if c is None else str(c) for c in row))
-            return f'<pre class="kb-prose">{"\n".join(out)}</pre>'
+            content = '\n'.join(out)
+            return f'<pre class="kb-prose">{content}</pre>'
     except Exception as e:
         logger.error('read book body failed: %s', e)
     return ''

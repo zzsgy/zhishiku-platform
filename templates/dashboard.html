@@ -2,94 +2,74 @@
 {% load kb_extras %}
 {% block title %}总览 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-grid-1x2"></i> 总览</h2>
-  <span class="text-muted small">{{ platform_name }} · 工作台首页</span>
-</div>
-
-<!-- 统计卡 -->
-<div class="row g-3">
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-primary shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ base_count }}</div><div class="small">知识库</div></div></div></div>
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-success shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ node_count }}</div><div class="small">知识节点</div></div></div></div>
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-info shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ collection_count }}</div><div class="small">收集项</div></div></div></div>
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-secondary shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ edge_count }}</div><div class="small">关系边</div></div></div></div>
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-warning shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ insp_count }}</div><div class="small">灵感</div></div></div></div>
-  <div class="col-6 col-md-3 col-lg-2"><div class="card kb-stat-card text-bg-dark shadow-sm"><div class="card-body"><div class="fs-2 fw-bold">{{ golden_count }}</div><div class="small">金句</div></div></div></div>
-</div>
-
-<!-- 趋势图 -->
-<div class="card shadow-sm mt-4">
-  <div class="card-header bg-transparent fw-semibold"><i class="bi bi-graph-up"></i> 近 7 天趋势</div>
-  <div class="card-body"><div id="trendChart" style="height:280px;"></div></div>
-</div>
-
-<div class="row g-4 mt-1">
-  <!-- 快捷入口 -->
-  <div class="col-lg-7">
-    <h5 class="mb-3"><i class="bi bi-box-arrow-up-right"></i> 快捷入口</h5>
-    <div class="row g-2">
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/starmap/"><i class="bi bi-diagram-3"></i> 知识星图</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/wiki/"><i class="bi bi-journal-richtext"></i> WiKI层</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/bookshelf/"><i class="bi bi-bookshelf"></i> 书架</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/knowledgebase/"><i class="bi bi-archive"></i> 知识库</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/inspiration/"><i class="bi bi-lightbulb"></i> 灵感库</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/selfmedia/"><i class="bi bi-megaphone"></i> 自媒体</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/office/"><i class="bi bi-briefcase"></i> 办公平台</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/collection/"><i class="bi bi-collection"></i> 知识收集</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/runarchive/"><i class="bi bi-clock-history"></i> 运行档案</a></div>
-      <div class="col-6 col-md-4"><a class="btn btn-outline-primary w-100 text-start" href="/settings/"><i class="bi bi-gear"></i> 系统设置</a></div>
-    </div>
+<div class="kb-page-head kb-dashboard-head">
+  <div>
+    <span class="kb-eyebrow">PERSONAL KNOWLEDGE WORKSPACE</span>
+    <h1>今天想做什么？</h1>
+    <p>收集信息、整理知识，或者继续今天的工作。</p>
   </div>
+  <a class="btn btn-primary" href="/collection/"><i class="bi bi-plus-lg"></i> 添加内容</a>
+</div>
 
-  <!-- 近期动态 -->
-  <div class="col-lg-5">
-    <h5 class="mb-3"><i class="bi bi-activity"></i> 近期动态</h5>
-    <ul class="list-group list-group-flush shadow-sm">
-      {% for l in recent_logs %}
-      <li class="list-group-item small d-flex justify-content-between">
-        <span><span class="badge bg-light text-dark">{{ l.module }}</span> {{ l.action }} {% if l.detail %}<span class="text-muted">· {{ l.detail|truncatechars:30 }}</span>{% endif %}</span>
-        <span class="text-muted">{{ l.created|date:'m-d H:i' }}</span>
-      </li>
-      {% empty %}<li class="list-group-item text-muted">暂无操作记录</li>{% endfor %}
-    </ul>
+<div class="kb-action-grid">
+  <a href="/collection/" class="kb-action-card"><span class="kb-action-icon"><i class="bi bi-inbox"></i></span><span><strong>收集资料</strong><small>文件、网页、图片或视频</small></span><i class="bi bi-arrow-right"></i></a>
+  <a href="/office/#records" class="kb-action-card"><span class="kb-action-icon"><i class="bi bi-check2-square"></i></span><span><strong>记录工作</strong><small>快速写下进展和待办</small></span><i class="bi bi-arrow-right"></i></a>
+  <a href="/notes/" class="kb-action-card"><span class="kb-action-icon"><i class="bi bi-pencil-square"></i></span><span><strong>写一条笔记</strong><small>捕捉想法与灵感</small></span><i class="bi bi-arrow-right"></i></a>
+  <a href="/wiki/create/" class="kb-action-card"><span class="kb-action-icon"><i class="bi bi-file-earmark-plus"></i></span><span><strong>创建知识</strong><small>新建一篇 Wiki 页面</small></span><i class="bi bi-arrow-right"></i></a>
+</div>
+
+<div class="kb-section-head">
+  <div><h2>工作概览</h2><p>你的知识与内容状态</p></div>
+  <span class="kb-section-date">最近 7 天</span>
+</div>
+<div class="kb-overview-grid">
+  <div class="kb-metric-strip">
+    <a href="/knowledgebase/" class="kb-metric"><span>知识条目</span><strong>{{ node_count }}</strong><small>{{ base_count }} 个知识库</small></a>
+    <a href="/collection/" class="kb-metric"><span>已收集</span><strong>{{ collection_count }}</strong><small>资料与链接</small></a>
+    <a href="/notes/" class="kb-metric"><span>灵感笔记</span><strong>{{ insp_count }}</strong><small>{{ golden_count }} 条金句</small></a>
+    <a href="/starmap/" class="kb-metric"><span>知识关系</span><strong>{{ edge_count }}</strong><small>查看关系图谱</small></a>
+  </div>
+  <div class="kb-trend-panel">
+    <div class="kb-panel-title"><span>活跃趋势</span><span class="kb-trend-legend"><i></i>操作 <i></i>新增知识</span></div>
+    <div id="trendChart" class="kb-trend-chart" aria-label="最近七天操作与新增知识趋势"></div>
   </div>
 </div>
 
-<div class="row g-4 mt-1">
-  <div class="col-12">
-    <h5 class="mb-3"><i class="bi bi-journal-richtext"></i> 最近知识节点</h5>
-    <div class="row g-2">
+<div class="kb-recent-grid">
+  <section class="kb-clean-panel">
+    <div class="kb-panel-title"><span>最近知识</span><a href="/knowledgebase/">查看全部 <i class="bi bi-arrow-right"></i></a></div>
+    <div class="kb-recent-list">
       {% for n in recent_nodes %}
-      <div class="col-md-6 col-lg-3"><a href="/wiki/node/{{ n.pk }}/" class="text-decoration-none"><div class="card shadow-sm h-100"><div class="card-body py-2"><div class="small fw-semibold">{{ n.title }}</div><div class="text-muted" style="font-size:12px;">{{ n.get_node_type_display }} · {{ n.updated|date:'m-d H:i' }}</div></div></div></a></div>
-      {% empty %}<div class="col-12 text-muted small">还没有知识节点。</div>{% endfor %}
+      <a href="/wiki/node/{{ n.pk }}/" class="kb-recent-item"><span class="kb-recent-icon"><i class="bi bi-file-earmark-text"></i></span><span><strong>{{ n.title }}</strong><small>{{ n.get_node_type_display }} · {{ n.updated|date:'m-d H:i' }}</small></span><i class="bi bi-chevron-right"></i></a>
+      {% empty %}<div class="kb-empty-state"><i class="bi bi-file-earmark-text"></i><span>还没有知识内容</span><a href="/collection/">导入第一份资料</a></div>{% endfor %}
     </div>
-  </div>
+  </section>
+  <section class="kb-clean-panel">
+    <div class="kb-panel-title"><span>最近活动</span><a href="/runarchive/">查看全部 <i class="bi bi-arrow-right"></i></a></div>
+    <div class="kb-activity-list">
+      {% for l in recent_logs|slice:':7' %}
+      <div class="kb-activity-item"><span class="kb-activity-dot"></span><span><strong>{{ l.module }}</strong><small>{{ l.action }}{% if l.detail %} · {{ l.detail|truncatechars:34 }}{% endif %}</small></span><time>{{ l.created|date:'m-d H:i' }}</time></div>
+      {% empty %}<div class="kb-empty-state"><i class="bi bi-clock-history"></i><span>暂无活动记录</span></div>{% endfor %}
+    </div>
+  </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script>
 (function () {
-  const box = document.getElementById('trendChart');
-  if (typeof echarts === 'undefined') {
-    box.innerHTML = '<div class="text-muted small py-4 text-center">📡 图表库（ECharts）加载失败，可能处于离线 / 内网环境。<br>联网后趋势图将自动显示。</div>';
-    return;
-  }
-  const chart = echarts.init(box);
   const days = {{ days|safe }};
-  chart.setOption({
-    tooltip: {trigger:'axis'},
-    legend: {data:['操作日志','新增节点']},
-    grid: {left:'3%', right:'4%', bottom:'3%', containLabel:true},
-    xAxis: {type:'category', data: days},
-    yAxis: {type:'value', minInterval:1},
-    series: [
-      {name:'操作日志', type:'line', smooth:true, data: {{ log_trend|safe }}, itemStyle:{color:'#2563eb'}},
-      {name:'新增节点', type:'bar', data: {{ node_trend|safe }}, itemStyle:{color:'#16a34a'}, barWidth:'40%'}
-    ]
-  });
-  window.addEventListener('resize', () => chart.resize());
+  const logs = {{ log_trend|safe }};
+  const nodes = {{ node_trend|safe }};
+  const box = document.getElementById('trendChart');
+  const max = Math.max(1, ...logs, ...nodes);
+  const width = 720, height = 190, padX = 28, padY = 24, innerH = height - 50;
+  const step = (width - padX * 2) / Math.max(1, days.length - 1);
+  const point = (v, i) => `${padX + i * step},${padY + innerH - (v / max) * innerH}`;
+  const grid = [0, .5, 1].map(r => `<line x1="${padX}" y1="${padY + innerH*r}" x2="${width-padX}" y2="${padY + innerH*r}"/>`).join('');
+  const bars = nodes.map((v,i) => `<rect x="${padX+i*step-5}" y="${padY+innerH-(v/max)*innerH}" width="10" height="${Math.max(2,(v/max)*innerH)}" rx="3"/>`).join('');
+  const labels = days.map((d,i) => `<text x="${padX+i*step}" y="${height-8}" text-anchor="middle">${d}</text>`).join('');
+  box.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img"><g class="kb-chart-grid">${grid}</g><g class="kb-chart-bars">${bars}</g><polyline class="kb-chart-line" points="${logs.map(point).join(' ')}"/><g class="kb-chart-labels">${labels}</g></svg>`;
 })();
 </script>
 {% endblock %}

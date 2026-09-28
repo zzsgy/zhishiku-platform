@@ -2,13 +2,26 @@
 {% load kb_extras %}
 {% block title %}系统设置 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0"><i class="bi bi-gear"></i> 系统设置</h2>
-  <span class="text-muted small">{{ cfg.platform_name }} · Django 5.2</span>
+<div class="kb-page-head">
+  <div>
+    <span class="kb-eyebrow">SETTINGS</span>
+    <h1>系统设置</h1>
+    <p>管理工作台、AI 服务、外部连接与数据备份。</p>
+  </div>
+  <span class="kb-version-chip">Django 5.2</span>
 </div>
 
+<nav class="kb-workspace-tabs kb-settings-tabs" id="settingsTabs" aria-label="系统设置分类">
+  <button type="button" class="is-active" data-settings-tab="general"><i class="bi bi-sliders"></i><span>基本设置</span></button>
+  <button type="button" data-settings-tab="profile"><i class="bi bi-person-vcard"></i><span>个人偏好</span></button>
+  <button type="button" data-settings-tab="ai"><i class="bi bi-cpu"></i><span>AI 服务</span></button>
+  <button type="button" data-settings-tab="integrations"><i class="bi bi-git"></i><span>外部连接</span></button>
+  <button type="button" data-settings-tab="backup"><i class="bi bi-shield-check"></i><span>备份迁移</span></button>
+  <button type="button" data-settings-tab="system"><i class="bi bi-diagram-3"></i><span>系统信息</span></button>
+</nav>
+
 <!-- 系统架构总览：四板块树状可视化（页签切换 + 节点展开/折叠） -->
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4" data-settings-panel="system">
   <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span><i class="bi bi-diagram-3"></i> 系统状态 · 平台架构总览</span>
     <span class="small text-muted fw-normal"><i class="bi bi-cursor"></i> 点击节点展开 / 折叠 · 「▾」为可展开层级</span>
@@ -57,7 +70,7 @@
   .bk-cmp td, .bk-cmp th { font-size: .78rem; vertical-align: middle; }
   .bk-legend { font-size: .78rem; color: var(--kb-muted); }
 </style>
-<div class="card shadow-sm mb-4 bk-card" id="backupCard">
+<div class="card shadow-sm mb-4 bk-card" id="backupCard" data-settings-panel="backup">
   <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span><i class="bi bi-shield-check"></i> 备份与迁移</span>
     <span class="small text-muted fw-normal">
@@ -185,7 +198,7 @@
 {{ backup_specs|json_script:'bk-specs' }}
 
 <!-- Gitee 库状态 -->
-<div class="card shadow-sm my-4">
+<div class="card shadow-sm my-4" data-settings-panel="integrations">
   <div class="card-header bg-transparent fw-semibold"><i class="bi bi-git"></i> Gitee 库状态</div>
   <div class="card-body">
     <div id="giteeBox" class="small">
@@ -223,7 +236,7 @@
 </script>
 
 <!-- 工作台设置 -->
-<div class="card shadow-sm">
+<div class="card shadow-sm is-active" data-settings-panel="general">
   <div class="card-header bg-transparent fw-semibold">工作台设置</div>
   <div class="card-body">
     {% if request.GET.saved %}<div class="alert alert-success py-2 mb-3">✅ 设置已保存。</div>{% endif %}
@@ -252,7 +265,7 @@
 </div>
 
 <!-- 个人设定与写作风格 -->
-<div class="card shadow-sm my-4" id="persona">
+<div class="card shadow-sm my-4" id="persona" data-settings-panel="profile">
   <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span><i class="bi bi-person-vcard"></i> 个人设定与写作风格（AI 输出遵循）</span>
     <span class="badge bg-secondary fw-normal">办公平台「献策 / 生成报告」与 AI 助手会按此输出</span>
@@ -295,7 +308,7 @@
 </div>
 
 <!-- AI 多服务配置 -->
-<div class="card shadow-sm my-4">
+<div class="card shadow-sm my-4" data-settings-panel="ai">
   <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
     <span><i class="bi bi-cpu"></i> AI 服务配置（支持并行接入多家）</span>
     <button class="btn btn-sm btn-outline-primary" id="aiAddBtn"><i class="bi bi-plus-lg"></i> 添加服务</button>
@@ -375,6 +388,23 @@
 
 {% block extra_js %}
 <script>
+/* 设置页按主题分区，避免所有高级配置同时铺开。 */
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-settings-tab]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[data-settings-panel]'));
+  function activate(name, updateHash) {
+    if (!tabs.some(function (t) { return t.dataset.settingsTab === name; })) name = 'general';
+    tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.settingsTab === name); });
+    panels.forEach(function (p) { p.classList.toggle('is-active', p.dataset.settingsPanel === name); });
+    if (updateHash && history.replaceState) history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.settingsTab, true); }); });
+  var initial = location.hash.replace('#', '');
+  if (initial === 'persona') initial = 'profile';
+  if (new URLSearchParams(location.search).has('saved') && !initial) initial = 'general';
+  activate(initial || 'general', false);
+})();
+
 /* ---------------- 系统架构树状总览渲染器 ---------------- */
 (function () {
   var dataBox = document.getElementById('arch-tree-data');

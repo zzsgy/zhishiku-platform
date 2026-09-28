@@ -2,11 +2,21 @@
 {% load kb_extras %}
 {% block title %}办公平台 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-briefcase"></i> 办公平台</h2>
-  {# 全网检索入口已上移到全局顶栏（base.html），任意页面常驻，此处不再重复放一份表单，也不再放提示文字 #}
+<div class="kb-page-head">
+  <div>
+    <span class="kb-eyebrow">WORK CENTER</span>
+    <h1>办公中心</h1>
+    <p>记录进展、生成建议和报告，集中管理工作资料。</p>
+  </div>
+  <a class="btn btn-outline-primary" href="/collection/"><i class="bi bi-file-earmark-arrow-up"></i> 导入工作文件</a>
 </div>
-<p class="text-muted small">行政管理 · 基层党建 · 网络运维。记录工作事宜，按知识库与你的风格献策，并生成日报 / 周报 / 月报 / 年报。</p>
+
+<nav class="kb-workspace-tabs" id="officeTabs" aria-label="办公中心功能">
+  <button type="button" class="is-active" data-office-tab="records"><i class="bi bi-check2-square"></i><span>工作记录</span><small>{{ record_shown }}</small></button>
+  <button type="button" data-office-tab="advise"><i class="bi bi-stars"></i><span>智能献策</span><small>{{ advise_count }}</small></button>
+  <button type="button" data-office-tab="reports"><i class="bi bi-file-earmark-bar-graph"></i><span>报告中心</span><small>{{ report_count }}</small></button>
+  <button type="button" data-office-tab="files"><i class="bi bi-folder2-open"></i><span>工作文件</span><small>{{ workfile_all_total }}</small></button>
+</nav>
 
 <style>
   html { scroll-behavior: smooth; }
@@ -304,7 +314,7 @@
   </section>
 
   <!-- ① 工作记录（记录工作事宜表单 + 按天记录列表，同属一个模块） -->
-  <section class="office-module">
+  <section class="office-module is-active" data-office-panel="records">
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm mb-3">
@@ -397,7 +407,7 @@
   </section>
 
   <!-- ② AI 智能献策 -->
-  <section class="office-module" id="ai-advise">
+  <section class="office-module" id="ai-advise" data-office-panel="advise">
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm">
@@ -457,7 +467,7 @@
   </section>
 
   <!-- ③ 生成报告：先选报告区间，再点类型生成；下方为已生成报告列表 -->
-  <section class="office-module">
+  <section class="office-module" data-office-panel="reports">
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm">
@@ -546,7 +556,7 @@
 
   <!-- ④ 工作分类标签：卡片即「工作文件目录」的分类筛选入口（**只筛文件，不影响上方工作记录**）；
        记录区的归档视图不做成卡片，入口在「工作记录」标题旁 -->
-  <div class="row g-3 office-module" id="work-cats">
+  <div class="row g-3 office-module" id="work-cats" data-office-panel="files">
     <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="small text-muted">
         <i class="bi bi-funnel"></i> 点击卡片筛选下方<strong>工作文件目录</strong>（不影响上方工作记录）；
@@ -605,7 +615,7 @@
 
   <!-- ⑤ 工作文件目录：**分类筛选的唯一作用对象**，只受本区分类卡片 + 关键词检索约束（叠加 AND）；
        上方「工作记录」区与此处的筛选完全无关，此处也只列工作文件、不列任何记录 -->
-  <section class="office-module">
+  <section class="office-module" data-office-panel="files">
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm" id="workfiles">
@@ -674,6 +684,32 @@
 </div><!-- /#office-scope -->
 
 <script>
+/* 办公中心只展示当前任务工作区，减少长页面堆叠。 */
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-office-tab]'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[data-office-panel]'));
+  function activate(name, updateHash) {
+    if (!tabs.some(function (t) { return t.dataset.officeTab === name; })) name = 'records';
+    tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.officeTab === name); });
+    panels.forEach(function (p) { p.classList.toggle('is-active', p.dataset.officePanel === name); });
+    if (updateHash && history.replaceState) history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.officeTab, true); }); });
+  var params = new URLSearchParams(location.search);
+  var fromHash = location.hash.replace('#', '');
+  var initial = params.has('cat') || params.has('wfq') ? 'files' : fromHash;
+  if (fromHash === 'ai-advise') initial = 'advise';
+  if (fromHash === 'report-form') initial = 'reports';
+  if (fromHash === 'workfiles' || fromHash === 'work-cats') initial = 'files';
+  activate(initial || 'records', false);
+  document.querySelectorAll('.os-jump').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var target = (link.getAttribute('href') || '').replace('#', '');
+      activate(target === 'ai-advise' ? 'advise' : target === 'report-form' ? 'reports' : 'files', false);
+    });
+  });
+})();
+
 /* 工作记录内联编辑。抽成具名函数，便于筛选局部刷新后重新绑定新 DOM。 */
 window.__officeInitRecords = function () {
   var STATUS_OPTS = [{% for s in status_opts %}'{{ s }}',{% endfor %}];

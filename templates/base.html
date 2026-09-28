@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ platform_name }}{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="{% vstatic 'favicon.svg' %}">
+  <link href="{% vstatic 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% vstatic 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
   {% comment %}
     主题样式必须带版本号（vstatic 会拼上文件 mtime）：URL 恒定不变时浏览器会
     一直用内存缓存里的旧 CSS 且不再发请求，改完版式用户也看不到 —— 这是
@@ -17,35 +18,50 @@
 <body>
   <aside class="kb-sidebar" id="kbSidebar">
     <div class="kb-sidebar-brand">
-      <i class="bi bi-book-half"></i>
-      <span class="kb-brand-text">{{ platform_name }}</span>
+      <span class="kb-brand-mark"><i class="bi bi-book-half"></i></span>
+      <span class="kb-brand-copy">
+        <strong>{{ platform_name }}</strong>
+        <small>个人知识工作台</small>
+      </span>
+      <button type="button" class="kb-sidebar-close" id="kbSidebarClose" aria-label="关闭导航">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
 
     <nav class="kb-sidebar-nav">
+      <div class="kb-nav-group-label">工作台</div>
       <a class="kb-nav-item {% if active_module == 'dashboard' %}active{% endif %}" href="/" title="总览">
-        <i class="bi bi-grid-1x2"></i>
-        <span>总览</span>
+        <i class="bi bi-house-door"></i>
+        <span>工作台</span>
       </a>
-      <a class="kb-nav-item {% if active_module == 'starmap' %}active{% endif %}" href="/starmap/" title="知识星图">
-        <i class="bi bi-diagram-3"></i>
-        <span>知识星图</span>
+      <a class="kb-nav-item {% if active_module == 'collection' %}active{% endif %}" href="/collection/" title="收集箱">
+        <i class="bi bi-inbox"></i>
+        <span>收集箱</span>
+      </a>
+
+      <div class="kb-nav-group-label">知识</div>
+      <a class="kb-nav-item {% if active_module == 'knowledgebase' %}active{% endif %}" href="/knowledgebase/" title="知识库">
+        <i class="bi bi-archive"></i>
+        <span>知识库</span>
       </a>
       <a class="kb-nav-item {% if active_module == 'wiki' %}active{% endif %}" href="/wiki/" title="WiKI层">
         <i class="bi bi-journal-richtext"></i>
-        <span>WiKI层</span>
+        <span>Wiki</span>
       </a>
-      <a class="kb-nav-item {% if active_module == 'precipitation' %}active{% endif %}" href="/wiki/precipitation/" title="知识沉淀">
-        <i class="bi bi-arrow-down-circle"></i>
-        <span>知识沉淀</span>
+      <a class="kb-nav-item {% if active_module == 'precipitation' %}active{% endif %}" href="/wiki/precipitation/" title="待整理知识">
+        <i class="bi bi-funnel"></i>
+        <span>待整理</span>
+      </a>
+      <a class="kb-nav-item {% if active_module == 'starmap' %}active{% endif %}" href="/starmap/" title="关系图谱">
+        <i class="bi bi-diagram-3"></i>
+        <span>关系图谱</span>
       </a>
       <a class="kb-nav-item {% if active_module == 'bookshelf' %}active{% endif %}" href="/bookshelf/" title="书架">
         <i class="bi bi-bookshelf"></i>
         <span>书架</span>
       </a>
-      <a class="kb-nav-item {% if active_module == 'knowledgebase' %}active{% endif %}" href="/knowledgebase/" title="知识库">
-        <i class="bi bi-archive"></i>
-        <span>知识库</span>
-      </a>
+
+      <div class="kb-nav-group-label">创作与工作</div>
       <a class="kb-nav-item {% if active_module == 'notes' %}active{% endif %}" href="/notes/" title="随笔记">
         <i class="bi bi-pencil-square"></i>
         <span>随笔记</span>
@@ -56,15 +72,13 @@
       </a>
       <a class="kb-nav-item {% if active_module == 'office' %}active{% endif %}" href="/office/" title="办公平台">
         <i class="bi bi-briefcase"></i>
-        <span>办公平台</span>
+        <span>办公中心</span>
       </a>
-      <a class="kb-nav-item {% if active_module == 'collection' %}active{% endif %}" href="/collection/" title="知识收集">
-        <i class="bi bi-collection"></i>
-        <span>知识收集</span>
-      </a>
+
+      <div class="kb-nav-group-label">系统</div>
       <a class="kb-nav-item {% if active_module == 'runarchive' %}active{% endif %}" href="/runarchive/" title="运行档案">
         <i class="bi bi-clock-history"></i>
-        <span>运行档案</span>
+        <span>活动记录</span>
       </a>
       <a class="kb-nav-item {% if active_module == 'settings' %}active{% endif %}" href="/settings/" title="系统设置">
         <i class="bi bi-gear"></i>
@@ -79,6 +93,7 @@
       </button>
     </div>
   </aside>
+  <button class="kb-sidebar-backdrop" id="kbSidebarBackdrop" type="button" aria-label="关闭导航"></button>
 
   <main class="kb-main">
     {% comment %}
@@ -91,11 +106,14 @@
     {% endcomment %}
     <div class="kb-topbar">
       <div class="kb-topbar-inner">
-        <span class="kb-topbar-title"><i class="bi bi-globe2"></i> 全网检索</span>
+        <button type="button" class="kb-menu-toggle" id="kbMenuToggle" aria-label="打开导航">
+          <i class="bi bi-list"></i>
+        </button>
+        <span class="kb-topbar-title"><i class="bi bi-search"></i> 搜索</span>
         <form class="kb-global-search" method="get" action="/office/search/" role="search">
           <i class="bi bi-search kb-global-search-icon" aria-hidden="true"></i>
           <input type="text" name="q" class="form-control form-control-sm" value="{{ global_search_q|default:'' }}"
-                 placeholder="输入关键词，聚合检索知识库 / 办公平台 / 全网…" aria-label="聚合检索关键词" required>
+                 placeholder="搜索知识、文件或全网内容" aria-label="聚合检索关键词" required>
           {% comment %}
             范围选择器：知识库 / 办公平台 / 全网，支持单选 / 多选 / 全选（至少保留一项）。
             选择随表单提交为 scopes 参数；auto-close=outside 让勾选多项时菜单不闪退。
@@ -119,9 +137,8 @@
             </div>
           </div>
           <input type="hidden" name="scopes" class="kb-scope-input" value="all">
-          <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-globe2"></i> 检索</button>
+          <button class="btn btn-sm btn-primary kb-search-submit" type="submit"><i class="bi bi-search"></i><span>搜索</span></button>
         </form>
-        <span class="kb-topbar-hint">Enter 或点「检索」→ 打开检索结果页</span>
       </div>
     </div>
     <div class="kb-main-inner">
@@ -132,9 +149,22 @@
     </footer>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{% vstatic 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
   <script src="{% vstatic 'js/theme.js' %}"></script>
   <script>
+    (function () {
+      var sidebar = document.getElementById('kbSidebar');
+      var openBtn = document.getElementById('kbMenuToggle');
+      var closeBtn = document.getElementById('kbSidebarClose');
+      var backdrop = document.getElementById('kbSidebarBackdrop');
+      function closeNav() { sidebar.classList.remove('is-open'); document.body.classList.remove('kb-nav-open'); }
+      function openNav() { sidebar.classList.add('is-open'); document.body.classList.add('kb-nav-open'); }
+      if (openBtn) openBtn.addEventListener('click', openNav);
+      if (closeBtn) closeBtn.addEventListener('click', closeNav);
+      if (backdrop) backdrop.addEventListener('click', closeNav);
+      sidebar.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', closeNav); });
+    })();
+
     /* 顶栏「范围」选择器：单选 / 多选 / 全选（至少保留一项），随表单提交 scopes 参数。
        约定：三项全选时提交 scopes=all（URL 保持简洁）；结果页按 URL 的 scopes 回显勾选态，
        改词再搜时组合自动保持。 */

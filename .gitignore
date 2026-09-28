@@ -30,6 +30,7 @@ logs/
 *.log
 
 # ---------- 4. 开发/调试临时产物 ----------
+temp/
 _tmp_last.txt
 _z.txt
 probe_out.txt
@@ -37,6 +38,11 @@ repro_out.txt
 *.tmp
 *.bak
 *.orig
+
+# 本地环境变量可能包含 API Key；仅允许提交示例文件
+.env
+.env.*
+!.env.example
 
 # ---------- 5. 备份输出包 ----------
 备份输出/

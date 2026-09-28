@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path
+from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -17,6 +18,7 @@ from systemsettings import views as settings_views
 
 urlpatterns = [
     path('', dashboard_views.index, name='home'),
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.svg', permanent=False)),
     path('dashboard/', dashboard_views.index, name='dashboard'),
     path('admin/', admin.site.urls),
     path('starmap/', starmap_views.index, name='starmap'),

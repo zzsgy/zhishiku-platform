@@ -249,5 +249,3 @@ def node_delete(request, pk):
     if base_pk:
         return redirect(f'/knowledgebase/?base={base_pk}')
     return redirect('/knowledgebase/')
-
-

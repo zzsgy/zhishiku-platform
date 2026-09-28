@@ -1,0 +1,51 @@
+{% comment %}金句网格：书架(/bookshelf/golden/)与知识库(/knowledgebase/golden/)共用，保证两个入口卡片与操作完全一致，避免双份维护漂移。{% endcomment %}
+<div class="row g-3" id="goldenGrid">
+  {% for g in items %}
+  <div class="col-md-6 col-lg-4 golden-col" id="goldcard-{{ g.pk }}">
+    <div class="card shadow-sm h-100 border-warning-subtle">
+      <div class="card-body d-flex flex-column">
+        <blockquote class="mb-2 flex-fill"><i class="bi bi-quote text-warning fs-4"></i> {{ g.text }}</blockquote>
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <small class="text-muted">{% if g.source %}{{ g.source }} · {% endif %}{{ g.created|date:'m-d' }}</small>
+          <span class="d-inline-flex align-items-center gap-2 flex-shrink-0">
+            <button class="btn btn-sm btn-link text-primary p-0 golden-act" type="button" onclick="toInsp('{{ g.text|escapejs }}')" title="收入灵感库"><i class="bi bi-lightbulb"></i> 转灵感</button>
+            <button class="btn btn-sm btn-link text-danger p-0 golden-del" type="button" onclick="delGolden({{ g.pk }})" title="删除该条金句"><i class="bi bi-trash"></i> 删除</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="col-12{% if items %} d-none{% endif %}" id="goldenEmpty">
+    <div class="alert alert-light mb-0">金句库还空着，去书里挑几句吧。</div>
+  </div>
+</div>
+
+<script>
+// 收入灵感库
+function toInsp(text){
+  fetch('/inspiration/api/add/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+    body: JSON.stringify({text:text, source:'金句库'})
+  }).then(r=>r.json()).then(d=>{ alert(d.ok?'已转入灵感库':'转入失败'); })
+    .catch(()=>alert('网络错误'));
+}
+
+// 删除单条金句：复用既有后端接口 /bookshelf/api/golden_delete/
+function delGolden(pk){
+  if(!window.confirm('删除这条金句？删除后不会自动恢复，需重新收录。')) return;
+  fetch('/bookshelf/api/golden_delete/', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+    body: JSON.stringify({id: pk})
+  }).then(r=>r.json()).then(d=>{
+    if(!d.ok){ alert('删除失败：' + (d.error || '')); return; }
+    var col = document.getElementById('goldcard-' + pk);
+    if(col) col.remove();
+    if(!document.querySelectorAll('#goldenGrid .golden-col').length){
+      var e = document.getElementById('goldenEmpty');
+      if(e) e.classList.remove('d-none');
+    }
+  }).catch(()=>alert('网络错误'));
+}
+</script>

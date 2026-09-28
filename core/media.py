@@ -335,4 +335,3 @@ def ocr_image_to_markdown(image_path, title='图片OCR'):
         return title, ''
     data = clean_ocr_text(raw)
     return title, data['markdown']
-
