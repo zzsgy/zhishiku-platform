@@ -62,7 +62,24 @@ def render_markdown(text):
         except Exception:
             html = f'<pre>{text}</pre>'
     html = _apply_wikilinks_outside_code(html)
+    html = wrap_tables(html)
     return html
+
+
+_TABLE_RE = re.compile(r'(<table[\s\S]*?</table>)', re.IGNORECASE)
+
+
+def wrap_tables(html):
+    """给每个表格套一层横向滚动容器 .kb-table-wrap。
+
+    背景：正文列宽约 769px，而「长路径 + 长摘要」这类多列表格的 min-content
+    可达 1182px。若让表格直接撑开，它会溢出正文卡片并侵入右栏，被吸顶的批注台
+    白底盖住 —— 表现为「表格文字跑出表格边界」。套上滚动容器后，表格要么按
+    容器宽度正常排版，要么在容器内部横向滚动，永远不会越界压到批注台。
+    """
+    if not html or '<table' not in html:
+        return html
+    return _TABLE_RE.sub(r'<div class="kb-table-wrap">\1</div>', html)
 
 
 def _apply_wikilinks_outside_code(html):
@@ -74,11 +91,17 @@ def _apply_wikilinks_outside_code(html):
 
 
 def _wikilink_repl(m):
+    """[[标题]] / [[标题|别名]] → 站内双链。
+
+    只输出链接文字，不再把 [[ ]] 画出来：方括号是「书写语法」，只属于 Markdown 源码；
+    阅读页与编辑页都应呈现成普通链接（蓝色 + 虚线下划线 + 悬停提示目标页）。
+    这样编辑器才能做到「编辑态不暴露语法符号」，且与阅读页完全一致。
+    """
     title = m.group(1).strip()
     label = (m.group(2) or title).strip()
     from urllib.parse import quote
     return (f'<a class="kb-wikilink" href="/wiki/?title={quote(title)}" '
-            f'title="打开知识页：{title}">[[{label}]]</a>')
+            f'title="打开知识页：{title}">{label}</a>')
 
 
 def extract_wikilinks(text):
@@ -114,6 +137,23 @@ CATEGORY_FOLDER = {
     '办公平台': '10_办公平台',
     '工作文件': '11_工作文件',
 }
+
+# 桌面归档：按主题细分到子目录，保持来源层级，便于按主题检索。
+ARCHIVE_CATEGORY_FOLDER = {
+    '归档·党建党务': '11_工作文件/党建党务',
+    '归档·档案管理': '11_工作文件/档案管理',
+    '归档·IT运维与信息化': '11_工作文件/IT运维与信息化',
+    '归档·质量管理与GMP': '11_工作文件/质量管理与GMP',
+    '归档·行政人事与内控': '11_工作文件/行政人事与内控',
+    '归档·系统开发与平台建设': '11_工作文件/系统开发与平台建设',
+    '归档·个人申报与职称': '11_工作文件/个人申报与职称',
+    '归档·企业与产品资料': '11_工作文件/企业与产品资料',
+    '归档·学习与考试': '06_书籍/学习与考试',
+    '归档·自媒体运营': '09_自媒体/运营资料',
+    '归档·AI工具与数字工作台': '05_AI生成/AI工具与数字工作台',
+    '归档·索引': '11_工作文件/00_归档索引',
+}
+CATEGORY_FOLDER.update(ARCHIVE_CATEGORY_FOLDER)
 
 
 def node_markdown_path(node):

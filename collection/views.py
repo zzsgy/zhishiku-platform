@@ -130,7 +130,16 @@ def recent_items(request):
 
 
 def _fail_reason_from_exc(e):
-    """根据解析异常推断『无法解析原因』，用于链接库归档。"""
+    """根据解析异常推断『无法解析原因』，用于链接库归档。
+
+    优先采用抓取侧给出的 ``reason``（``core.article_parser.WebParseError``）：
+    它是在现场判定的（SPA 空壳 / 登录墙 / 付费墙 / HTTPS 状态码），比事后按
+    异常类型猜要准；只有拿不到时才退回下面的启发式。
+    """
+    valid = {key for key, _label in LinkItem.REASON_CHOICES}
+    reason = getattr(e, 'reason', '')
+    if reason in valid:
+        return reason
     try:
         import requests
     except Exception:

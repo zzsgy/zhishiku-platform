@@ -235,6 +235,9 @@ class LinkItem(models.Model):
         ('unsupported', '格式不支持'),
         ('timeout', '超时'),
         ('login_wall', '登录墙'),
+        # 抓取侧对 404/410 会给出 'invalid'；此前 choices 里没有这一项，
+        # get_unparse_reason_display 会退化成直接显示英文键名 "invalid"。
+        ('invalid', '链接失效'),
         ('unknown', '未知'),
     ]
     STATUS_CHOICES = [

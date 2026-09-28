@@ -12,12 +12,12 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
-logger = logging.getLogger('kb')
+# 网页解析实现已独立成 core/article_parser.py（保真优先：编码判定 / 正文容器优先 /
+# 结构完整性校验 / 全结构 HTML→Markdown / 取回护栏）。这里只保留对外入口。
+from core.article_parser import (HEADERS, WebParseError, parse_article,
+                                 resolve_encoding)
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                  '(KHTML, like Gecko) Chrome/120.0 Safari/537.36'
-}
+logger = logging.getLogger('kb')
 
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp'}
 
@@ -98,46 +98,20 @@ def parse_local_file(file_obj, orig_name, upload_url=''):
 
 
 # ---------------------------------------------------------------------------
-# 网页解析（普通网页 / 公众号 / 共享链接 / B站图文 等）
+# 网页解析（普通网页 / 公众号 / B站图文 / 技术文档）
 # ---------------------------------------------------------------------------
 def parse_web_page(url, platform='auto'):
-    """抓取网页正文，提取标题与正文段落，返回 (title, markdown)。"""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=25)
-    except requests.exceptions.RequestException as e:
-        raise ValueError('网页请求失败（网络/DNS/超时/被拦截）：%s' % str(e)[:160])
-    if resp.status_code != 200:
-        raise ValueError('网页返回状态码 %s，无法解析（可能为防盗链/反爬/付费墙）。' % resp.status_code)
-    resp.encoding = resp.apparent_encoding or 'utf-8'
-    html = resp.text
-    soup = BeautifulSoup(html, 'html.parser')
+    """抓取网页正文，返回 ``(title, markdown)``。
 
-    title = soup.title.get_text(strip=True) if soup.title else url
-    try:
-        from readability import Document
-        doc = Document(html)
-        body_soup = BeautifulSoup(doc.summary(), 'html.parser')
-        title = doc.short_title() or title
-    except Exception:
-        body_soup = soup
+    失败时抛 ``WebParseError``（``ValueError`` 子类，带 ``reason`` 机器可读原因），
+    调用方据此把链接归档到链接库并由 ``_fail_reason_from_exc`` 归类。
 
-    for tag in body_soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'noscript']):
-        tag.decompose()
-
-    lines = []
-    for el in body_soup.find_all(['h1', 'h2', 'h3', 'p', 'li']):
-        txt = el.get_text(strip=True)
-        if not txt:
-            continue
-        tag = el.name
-        if tag in ('h1', 'h2', 'h3'):
-            level = '#' * int(tag[1])
-            lines.append(f'{level} {txt}')
-        else:
-            lines.append(txt)
-
-    md = f'# {title}\n\n> 来源：{url}\n> 平台识别：{platform}\n\n' + '\n\n'.join(lines)
-    return title, md
+    真正的实现在 ``core.article_parser``：公众号走 ``#js_content``、B 站图文走
+    开放接口、其余走正文容器（Readability 仅兜底且需通过结构完整性校验），
+    并把代码块 / 图片 / 表格 / 列表完整转成 Markdown。
+    """
+    result = parse_article(url, platform)
+    return result['title'], result['markdown']
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +121,8 @@ def search_web(query, limit=10):
     try:
         url = 'https://www.bing.com/search?q=' + requests.utils.quote(query)
         r = requests.get(url, headers=HEADERS, timeout=15)
+        # 不走 r.text：Bing 偶尔不带 charset，requests 会退回 ISO-8859-1 导致乱码
+        r.encoding = resolve_encoding(r.content, r.headers.get('Content-Type') or '')
         soup = BeautifulSoup(r.text, 'html.parser')
         results = []
         for li in soup.select('li.b_algo')[:limit]:

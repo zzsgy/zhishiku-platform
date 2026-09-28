@@ -5,6 +5,7 @@
 """
 import json
 import logging
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -45,6 +46,86 @@ def _safe_parent(raw, self_pk=None):
         seen.add(cur.pk)
         cur = KnowledgeNode.objects.filter(pk=cur.parent_id).first()
     return pid
+
+
+# ---------------------------------------------------------------------------
+# 正文编辑：渲染通道 + 内容骤减熔断
+# 编辑页现在是「所见即所得」的富文本编辑区，Markdown 只是持久化格式。
+# 因此必须补两件事：①富文本与阅读页出自同一渲染器；②防止富文本往返把正文吃掉。
+# ---------------------------------------------------------------------------
+_MD_MARK_RE = re.compile(r'[#>*`_~\[\]()!|]')
+_WS_RE = re.compile(r'\s+')
+
+
+def md_weight(text):
+    """正文「信息量」：剔掉 Markdown 标记与全部空白后的字符数。
+
+    不能用 len(text)：用户把整段改成 `## 标题` 这种标记密集的短内容时，
+    字面长度会误导判断。剔标记后计数才是「内容还剩多少」的近似量。
+    """
+    return len(_WS_RE.sub('', _MD_MARK_RE.sub('', text or '')))
+
+
+def content_loss(old_md, new_md):
+    """判断本次提交是否属于「内容骤减」。返回 (是否骤减, 旧量, 新量)。
+
+    阈值取「新量 < 旧量 60% 且净减 > 80 字」：既能拦住富文本往返导致的
+    大面积丢失，又不会误伤正常的删改段落。旧内容过短时直接放行。
+    """
+    old_w, new_w = md_weight(old_md), md_weight(new_md)
+    if old_w < 40:
+        return False, old_w, new_w
+    return (new_w < old_w * 0.6 and (old_w - new_w) > 80), old_w, new_w
+
+
+def _edit_context(node, request=None, form_md=None, loss_warning='', submitted=None):
+    """构造编辑页上下文。
+
+    form_md / submitted 用于「拦截后回显」：内容骤减被拦下时必须把用户刚写的内容
+    原样送回表单，否则一次拦截会变成二次数据损失。node 为 None 表示新建。
+    """
+    sub = submitted if submitted is not None else {}
+
+    def pick(name, default):
+        return sub.get(name, default) if submitted is not None else default
+
+    md = (node.content_md if node else '') if form_md is None else form_md
+    parent_candidates = (KnowledgeNode.objects.exclude(pk=node.pk) if node
+                         else KnowledgeNode.objects.all()).order_by('title')
+    return {
+        'node': node,
+        'bases': None if node else KnowledgeBase.objects.all(),
+        'parent_candidates': parent_candidates,
+        'form_md': md,
+        # 富文本区直接吃这条 HTML：与阅读页 render_markdown 同一渲染器，
+        # 编辑态所见 == 保存后阅读页所见。
+        'content_html': render_markdown(md),
+        'md_weight': md_weight(md),
+        'loss_warning': loss_warning,
+        'f_title': pick('title', node.title if node else ''),
+        'f_category': pick('category', node.category if node else ''),
+        'f_tags': pick('tags', node.tags if node else ''),
+        'f_node_type': pick('node_type', (node.node_type if node else 'wiki')),
+        'f_parent': pick('parent', str(node.parent_id) if node and node.parent_id else ''),
+        'force_checked': submitted is not None,
+    }
+
+
+@csrf_exempt
+def api_render_md(request):
+    """Markdown → HTML（与阅读页同一渲染器）。
+
+    编辑页「源码 → 所见即所得」切换、粘贴富文本化都走这里，保证编辑态
+    与阅读页出自同一条渲染管线，不会出现「编辑里是这样、存完变那样」。
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'})
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid json'})
+    text = data.get('text') or ''
+    return JsonResponse({'ok': True, 'html': render_markdown(text)})
 
 
 def index(request):
@@ -94,8 +175,22 @@ def node_view(request, pk):
 def node_edit(request, pk):
     node = get_object_or_404(KnowledgeNode, pk=pk)
     if request.method == 'POST':
+        content_md = request.POST.get('content_md', '')
+        force = request.POST.get('force_save') == '1'
+        dropped, old_w, new_w = content_loss(node.content_md, content_md)
+        if dropped and not force:
+            # 富文本往返异常（或误删）时拦下：不写库、不落盘，把原样内容回显给用户核对
+            pct = int(round((1 - new_w / max(old_w, 1)) * 100))
+            log_operation('wiki', 'edit_blocked',
+                          detail='%s 正文骤减 %s→%s' % (node.title, old_w, new_w))
+            return render(request, 'wiki_node_edit.html', _edit_context(
+                node, request, form_md=content_md, submitted=request.POST,
+                loss_warning=('本次正文信息量从约 %s 字降到约 %s 字（-约 %d%%），'
+                              '已被拦截、未写入。请核对是否误删；确认无误请勾选'
+                              '「我已核对内容完整性」后再保存。') % (old_w, new_w, pct),
+            ))
         node.title = (request.POST.get('title') or '').strip() or node.title
-        node.content_md = request.POST.get('content_md', '')
+        node.content_md = content_md
         node.category = (request.POST.get('category') or '').strip()
         node.tags = (request.POST.get('tags') or '').strip()
         node.node_type = request.POST.get('node_type', node.node_type)
@@ -105,19 +200,12 @@ def node_edit(request, pk):
         auto_link_edges(node)
         log_operation('wiki', 'edit_node', detail=node.title)
         return redirect(f'/wiki/node/{node.pk}/')
-    parent_candidates = KnowledgeNode.objects.exclude(pk=node.pk).order_by('title')
-    return render(request, 'wiki_node_edit.html', {
-        'node': node, 'bases': None, 'parent_candidates': parent_candidates,
-    })
+    return render(request, 'wiki_node_edit.html', _edit_context(node, request))
 
 
 def node_create(request):
     if request.method != 'POST':
-        bases = KnowledgeBase.objects.all()
-        parent_candidates = KnowledgeNode.objects.all().order_by('title')
-        return render(request, 'wiki_node_edit.html', {
-            'node': None, 'bases': bases, 'parent_candidates': parent_candidates,
-        })
+        return render(request, 'wiki_node_edit.html', _edit_context(None, request))
     base = KnowledgeBase.objects.filter(pk=request.POST.get('base')).first()
     node = KnowledgeNode.objects.create(
         base=base,

@@ -56,21 +56,24 @@
   </div>
 </div>
 
-<div class="row">
-  <div class="col-lg-8">
-    <!-- 阅读正文 -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header small fw-semibold d-flex justify-content-between">
-        <span>正文</span>
-        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
-      </div>
-      <div class="card-body">
-        <article class="kb-prose">{{ html|safe }}</article>
-      </div>
+{% comment %}
+  结构约束：批注台（aside）必须排在正文（article）**之前**。
+  正文动辄几万像素高，批注台一旦在 DOM 里落在正文之后，任何一次样式失效
+  （旧缓存 / 断点错 / CSS 加载失败）都会把它推到正文末尾 —— 用户看到的是
+  「批注台被删除了」。放在前面后它最差也只是「出现在正文上方」，永不消失。
+  宽屏的「正文在左、批注台在右」由 theme.css 里 .kb-reader-main/-side 的
+  grid-column / grid-row 显式落位实现，不依赖 DOM 顺序，改序不影响版式。
+{% endcomment %}
+<div class="kb-reader">
+  <aside class="kb-reader-side" id="kbSidePanel" aria-label="批注台">
+    <!-- 批注台：阅读笔记 / 本文金句 / 反向链接 / 出链。
+         ≥992px 与正文并排（显式落位到右列）并吸顶常驻；<992px 上移到正文之前，
+         保证任何视口、任何样式状态下都一眼可见。 -->
+    <div class="kb-side-head">
+      <i class="bi bi-journal-text"></i> 批注台
+      <span class="kb-side-head-tip">笔记 · 金句 · 双向链接</span>
     </div>
-  </div>
 
-  <div class="col-lg-4 kb-reader-side">
     <!-- 阅读笔记（右侧边栏，阅读时随时查看与编辑，与书架阅读一致） -->
     <div class="card shadow-sm mb-3">
       <div class="card-header small fw-semibold d-flex justify-content-between">
@@ -123,12 +126,25 @@
         {% empty %}<li class="list-group-item small text-muted">暂无</li>{% endfor %}
       </ul>
     </div>
-  </div>
+  </aside>
+
+  <article class="kb-reader-main">
+    <!-- 阅读正文 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span>正文</span>
+        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
+      </div>
+      <div class="card-body">
+        <article class="kb-prose">{{ html|safe }}</article>
+      </div>
+    </div>
+  </article>
 </div>
 {% endblock %}
 {% block extra_js %}
 <script>window.KB_NODE_ID = {{ node.pk }}; window.KB_NODE_TITLE = "{{ node.title|escapejs }}";</script>
-<script src="/static/js/selection.js"></script>
+<script src="{% vstatic 'js/selection.js' %}"></script>
 {% if node.node_type == 'wiki' %}
 <script>
   (function () {

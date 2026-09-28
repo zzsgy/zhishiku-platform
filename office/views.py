@@ -505,6 +505,25 @@ def search(request):
     })
 
 
+def _persona_block():
+    """组装「个人设定 / 写作风格 / 输出禁忌」提示词片段。
+
+    唯一出口：献策与报告共用，避免两处口径漂移。
+    三段内容在「系统设置 → 个人设定与写作风格」维护。
+    """
+    segs = []
+    profile = SystemConfig.get_value('user_profile', '').strip()
+    style = SystemConfig.get_value('user_style', '').strip()
+    taboo = SystemConfig.get_value('user_taboo', '').strip()
+    if profile:
+        segs.append('【我的个人设定】\n' + profile)
+    if style:
+        segs.append('【我的写作风格】\n' + style)
+    if taboo:
+        segs.append('【输出禁忌】\n' + taboo)
+    return '\n\n'.join(segs)
+
+
 def advise(request):
     """生成献策：走 AI（无 Key 时本地汇总降级），随后**落库 + 落盘**再跳转详情页。
 
@@ -525,13 +544,16 @@ def advise(request):
     related = KnowledgeNode.objects.filter(title__icontains=topic)[:6]
     kb_ctx = '\n'.join(f'- 《{n.title}》：{(n.content_md or "")[:300]}' for n in related)
     style = SystemConfig.get_value('user_style', '')
-    style_line = f'我的个人表达风格：{style}\n' if style else ''
+    persona = _persona_block()
+    # persona 已内含【我的写作风格】，此处仅在其为空时回退，避免同一份风格重复注入
+    style_line = f'我的个人表达风格：{style}\n' if (style and not persona) else ''
 
     prompt = (
         f'主题：{topic}\n工作类别：{CATEGORY_LABELS.get(cat)}\n'
         f'{style_line}'
+        f'{persona + chr(10) + chr(10) if persona else ""}'
         f'我的知识库相关资料：\n{kb_ctx or "（无直接相关资料）"}\n\n'
-        f'请结合上述资料与我的风格，给出务实、可落地的建议与行动方案（分点、有优先级）。'
+        f'请严格遵循上述个人设定、写作风格与输出禁忌，结合资料给出务实、可落地的建议与行动方案（分点、有优先级）。'
     )
     ans = ask_qwen(
         '你是我的专属工作参谋，熟悉我的知识库与个人表达风格，善于把信息转化为可执行建议。',
@@ -628,10 +650,14 @@ def report_gen(request):
         for r in recs
     )
     style = SystemConfig.get_value('user_style', '')
-    style_line = f'报告需体现我的个人风格：{style}\n' if style else ''
+    persona = _persona_block()
+    # 同 advise()：persona 已含风格段，避免重复注入
+    style_line = f'报告需体现我的个人风格：{style}\n' if (style and not persona) else ''
     prompt = (
         f'请基于以下工作记录，生成一份{KIND_LABELS.get(kind)}（{start} 至 {end}）。\n'
-        f'{style_line}要求：结构清晰、要点突出、语言符合我的风格、可直接用于汇报。\n\n'
+        f'{style_line}'
+        f'{persona + chr(10) + chr(10) if persona else ""}'
+        f'要求：结构清晰、要点突出、术语规范、可直接用于汇报，并严格遵循上述个人设定与写作风格。\n\n'
         f'工作记录：\n{rec_text or "（本期无工作记录）"}'
     )
     ans = ask_qwen('你是我的公文助理，擅长将工作记录整理为规范、专业的汇报文档。', prompt)

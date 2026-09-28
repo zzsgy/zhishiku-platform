@@ -30,6 +30,7 @@ urlpatterns = [
     path('wiki/precipitation/discard/<int:pk>/', wiki_views.precipitation_discard, name='wiki_precip_discard'),
     path('wiki/node/<int:pk>/grow/', wiki_views.api_grow, name='wiki_node_grow'),
     path('wiki/api/ask/', wiki_views.api_ask, name='wiki_api_ask'),
+    path('wiki/api/render/', wiki_views.api_render_md, name='wiki_api_render'),
     path('bookshelf/', bookshelf_views.index, name='bookshelf'),
     path('bookshelf/add/', bookshelf_views.add, name='bookshelf_add'),
     path('bookshelf/golden/', bookshelf_views.golden_list, name='bookshelf_golden'),

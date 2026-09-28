@@ -16,6 +16,24 @@
   --kb-topbar-h: 64px;
   /* 页面左右内边距：全局顶栏与正文容器共用同一令牌，两者左右边缘因此在任意视口下严格对齐 */
   --kb-gutter: 32px;
+  /* 批注台（阅读页右侧「阅读笔记 / 金句 / 反向链接 / 出链」）专用配色：
+     用独立底纹把它与白色正文卡区分成两个平面，并保证辅助文案在底纹上的可读对比 */
+  --kb-note-surface: #f2f6ff;
+  --kb-note-accent: #2563eb;
+  --kb-note-border: #dbe4f5;
+  --kb-note-head: #1e3a8a;
+  --kb-note-muted: #4b5563;
+  /* 阅读页版式令牌：正文、标题、批注台共用同一套度量。
+     所有阅读类页面（WiKI 节点 / 书架 / 献策 / 报告）都从这里取值，
+     改版式只改这一处 —— 这就是「所有文章共用一套设计」的落点。 */
+  --kb-read-size: 15.5px;       /* 正文字号 */
+  --kb-read-line: 1.78;         /* 正文行高 */
+  --kb-read-gap: 1.05em;        /* 段落间距 */
+  --kb-read-head-gap: 1.9em;    /* 标题上间距（大于下间距，形成层级节奏） */
+  --kb-read-block-gap: 1.35em;  /* 块级元素（表格/代码块/引用/图）间距 */
+  --kb-read-side-w: 344px;      /* 批注台固定宽度 */
+  --kb-read-col-gap: 26px;      /* 正文与批注台的列间距 */
+  --kb-read-shade: rgba(15, 23, 42, .18);  /* 宽表格可横向滚动时的边缘提示色 */
 }
 
 [data-theme="dark"] {
@@ -27,6 +45,12 @@
   --kb-primary: #3b82f6;
   --kb-primary-hover: #60a5fa;
   --kb-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.18);
+  --kb-note-surface: #1b2537;
+  --kb-note-accent: #60a5fa;
+  --kb-note-border: #2f3b52;
+  --kb-note-head: #bfdbfe;
+  --kb-note-muted: #cbd5e1;
+  --kb-read-shade: rgba(0, 0, 0, .55);
 }
 
 * { box-sizing: border-box; }
@@ -152,6 +176,10 @@ a:hover { color: var(--kb-primary-hover); }
 .kb-main {
   margin-left: var(--kb-sidebar-width);
   flex: 1;
+  /* 关键：flex item 默认 min-width:auto，会被内部超宽内容（宽表格、长串、大图）
+     撑宽，表现为「整个页面出现横向滚动条」。置 0 后主容器可正常收缩，
+     超宽内容只能在各自的局部滚动容器里消化。 */
+  min-width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -401,15 +429,180 @@ a:hover { color: var(--kb-primary-hover); }
   .kb-main-inner { padding: 18px var(--kb-gutter); }
 }
 
-/* Markdown 正文排版 */
-.kb-prose { line-height: 1.7; }
-.kb-prose h1, .kb-prose h2, .kb-prose h3 { margin-top: 1.2em; margin-bottom: .5em; }
-.kb-prose p { margin-bottom: .8em; }
-.kb-prose pre { background: var(--kb-bg); padding: 12px; border-radius: 8px; overflow: auto; }
-.kb-prose code { background: var(--kb-bg); padding: 2px 5px; border-radius: 4px; font-size: .9em; }
-.kb-prose blockquote { border-left: 3px solid var(--kb-primary); margin: 0; padding: .4em 1em; color: var(--kb-muted); }
-.kb-prose table { width: 100%; border-collapse: collapse; }
-.kb-prose th, .kb-prose td { border: 1px solid var(--kb-border); padding: 6px 10px; }
+/* ===========================================================================
+   阅读页版式体系 —— 全站统一（所有文章共用同一套结构 / 排版 / 视觉）
+   ---------------------------------------------------------------------------
+   结构层 .kb-reader   ：CSS Grid 双栏（正文 · 批注台）。左列用 minmax(0,1fr)，
+                        从布局层面保证正文永不被超宽内容撑破，批注台宽度恒定。
+   排版层 .kb-prose    ：标题阶梯 / 段落 / 列表 / 引用 / 代码 / 表格 / 图片的完整
+                        度量体系，每一类可能超宽的块都有明确约束。
+   组件层 .kb-reader-side：批注台卡片统一底纹、强调线与间距节奏。
+   =========================================================================== */
+
+/* ---------------------------- 结构层：双栏版式 ----------------------------
+   ⚠️ 硬约束：两个阅读模板里 <aside class="kb-reader-side"> 排在
+   <article class="kb-reader-main"> **之前**（批注台在 DOM 里就是第一个）。
+   原因：批注台必须「结构上永远可达」。正文动辄几万像素高，一旦批注台在 DOM 里
+   落在正文之后，任何一次样式失效（旧缓存、断点写错、CSS 加载失败）都会把它推到
+   正文末尾 —— 用户看到的现象不是「排版变了」，而是「**批注台被删除了**」。
+   放在前面后，即使所有布局规则都失效，它也只会退化成「出现在正文上方」，
+   绝不会消失。宽屏的「正文在左、批注台在右」由下面两行显式落位实现，
+   **不依赖 DOM 顺序**，所以改序不影响宽屏版式。 */
+.kb-reader {
+  display: grid;
+  /* 批注台宽度自适应：宽屏取 344px 上限，窄屏压缩到 280px 下限，
+     把省下的宽度让给正文 —— 这样 1280 这类常见笔记本分辨率下，
+     正文列也放得下六列宽表格，不必横向滚动。 */
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 26%, var(--kb-read-side-w));
+  gap: var(--kb-read-col-gap);
+  align-items: start;
+}
+.kb-reader-main { grid-column: 1; grid-row: 1; min-width: 0; }
+.kb-reader-side { grid-column: 2; grid-row: 1; min-width: 0; }
+
+/* 单栏断点与 Bootstrap 的 lg（992px）对齐 —— 这点是硬约束：
+   原 `col-lg-8 / col-lg-4` 在 ≥992px 就是并排的，若把断点抬到 1200，
+   则在 992~1199（1024 / 1093 / 1152 等常见窗口与高 DPI 缩放组合）区间里，
+   批注台会被单栏布局推到上万像素长的正文**之后**，视觉上等同于「批注台被移除」。
+   ≥992px 一律并排，保证批注台始终在首屏右侧。
+   单栏时批注台落 row 1、正文落 row 2 —— 批注台上移到正文**之前**：它是阅读时的
+   随取工具区（写笔记 / 存金句 / 看双向链接），沉下去用户根本找不到。 */
+@media (max-width: 991.98px) {
+  .kb-reader { grid-template-columns: minmax(0, 1fr); }
+  .kb-reader-side { grid-column: 1; grid-row: 1; }
+  .kb-reader-main { grid-column: 1; grid-row: 2; }
+}
+
+/* ---------------------------- 排版层：正文 ---------------------------- */
+.kb-prose {
+  font-size: var(--kb-read-size);
+  line-height: var(--kb-read-line);
+  color: var(--kb-text);
+  /* 段落内的长 URL / 文件路径 / 无空格长串一律可折，不再顶破卡片 */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.kb-prose > :first-child { margin-top: 0; }
+.kb-prose > :last-child { margin-bottom: 0; }
+
+/* 标题阶梯：字号递减、上间距大于下间距，形成清晰的层级节奏 */
+.kb-prose h1, .kb-prose h2, .kb-prose h3,
+.kb-prose h4, .kb-prose h5, .kb-prose h6 {
+  margin: var(--kb-read-head-gap) 0 .55em;
+  line-height: 1.35;
+  font-weight: 650;
+  color: var(--kb-text);
+}
+.kb-prose h1 { font-size: 1.5em; padding-bottom: .32em; border-bottom: 2px solid var(--kb-border); }
+.kb-prose h2 { font-size: 1.28em; padding-bottom: .28em; border-bottom: 1px solid var(--kb-border); }
+.kb-prose h3 { font-size: 1.12em; }
+/* 三级标题加一道主色短竖条，长文档里一眼能看出层次 */
+.kb-prose h3::before {
+  content: ''; display: inline-block; width: 3px; height: .92em; margin-right: .5em;
+  background: var(--kb-primary); border-radius: 2px; vertical-align: -.08em;
+}
+.kb-prose h4 { font-size: 1.02em; }
+.kb-prose h5, .kb-prose h6 { font-size: .96em; color: var(--kb-muted); }
+
+/* 段落与行内元素 */
+.kb-prose p { margin: 0 0 var(--kb-read-gap); }
+.kb-prose strong { font-weight: 650; }
+.kb-prose del { color: var(--kb-muted); }
+.kb-prose a {
+  color: var(--kb-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.kb-prose a:hover { color: var(--kb-primary-hover); }
+.kb-prose hr { border: 0; border-top: 1px solid var(--kb-border); margin: var(--kb-read-block-gap) 0; }
+
+/* 列表：统一缩进、条目与嵌套间距 */
+.kb-prose ul, .kb-prose ol { margin: 0 0 var(--kb-read-gap); padding-left: 1.5em; }
+.kb-prose ul { list-style: disc; }
+.kb-prose ul ul { list-style: circle; }
+.kb-prose ol { list-style: decimal; }
+.kb-prose li { margin: .3em 0; }
+.kb-prose li > ul, .kb-prose li > ol { margin: .3em 0; }
+.kb-prose li::marker { color: var(--kb-primary); }
+
+/* 引用 */
+.kb-prose blockquote {
+  margin: 0 0 var(--kb-read-block-gap);
+  padding: .6em 1em;
+  border-left: 3px solid var(--kb-primary);
+  border-radius: 0 8px 8px 0;
+  background: var(--kb-bg);
+  color: var(--kb-muted);
+}
+.kb-prose blockquote > :last-child { margin-bottom: 0; }
+
+/* 代码：行内与块级分开定义 */
+.kb-prose code {
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  padding: .12em .4em;
+  border-radius: 4px;
+  font-size: .88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+.kb-prose pre {
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-border);
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin: 0 0 var(--kb-read-block-gap);
+  overflow: auto;          /* 长代码行在本块内滚动，不顶破正文列 */
+  max-height: 460px;
+  font-size: .88em;
+  line-height: 1.6;
+}
+.kb-prose pre code { background: none; border: 0; padding: 0; font-size: 1em; }
+
+/* 表格：外层 wrap 承担横向滚动；单元格 break-word 保住自然列宽。
+   —— 不要改成 overflow-wrap:anywhere：那会把每列 min-content 压到 1 个字符，
+      日期 / 大小 / 类型这类短列会被长列（路径 · 摘要）挤成逐字竖排。
+   —— 用 min-width 给单元格一个内容下限，保证短列整行显示；列数很多时由
+      .kb-table-wrap 的横向滚动兜底，绝不外溢到批注台。 */
+.kb-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 var(--kb-read-block-gap);
+}
+.kb-table-wrap > table { width: 100%; border-collapse: collapse; margin: 0; }
+.kb-prose table { width: 100%; border-collapse: collapse; margin: 0 0 var(--kb-read-block-gap); }
+.kb-prose th, .kb-prose td {
+  border: 1px solid var(--kb-border);
+  padding: 7px 11px;
+  overflow-wrap: anywhere;
+  /* 列下限：让「日期 / 大小 / 类型」这类短内容保住整行。
+     auto 布局会把 min-width 之外的全部余量按内容比例分给长列（路径 / 摘要），
+     所以这个值只决定「最短列有多宽」，不会让长列变窄 —— 这正是短列不被压扁、
+     长列又能拿到宽度的原因。7.5em（≈116px）是实测能容下「2026-09-09」整行的值。 */
+  min-width: 7.5em;
+  vertical-align: top;
+}
+/* 首列通常是序号 / 编号这类极短内容，单独收窄，把省下的宽度让给日期与摘要列 */
+.kb-prose th:first-child,
+.kb-prose td:first-child { min-width: 4.5em; }
+.kb-prose thead th {
+  background: var(--kb-bg);
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;     /* 表头都很短，不折行 → 每列天然有一个合理下限 */
+}
+.kb-prose tbody tr:nth-child(even) { background: color-mix(in srgb, var(--kb-bg) 55%, transparent); }
+.kb-prose tbody tr:hover { background: color-mix(in srgb, var(--kb-primary) 7%, transparent); }
+
+/* 图片与媒体：任何情况下都不允许溢出正文列 */
+.kb-prose img, .kb-prose video, .kb-prose svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.kb-prose p > img { display: block; }
+.kb-prose figcaption { font-size: .9em; color: var(--kb-muted); text-align: center; margin-top: .4em; }
 .kb-wikilink, a.kb-wikilink { color: var(--kb-primary); font-weight: 600; text-decoration: none; border-bottom: 1px dashed var(--kb-primary); }
 .kb-wikilink:hover { background: rgba(37,99,235,.1); }
 
@@ -450,6 +643,108 @@ a:hover { color: var(--kb-primary-hover); }
 .kb-ai-body button { padding: 8px 16px; border: 0; border-radius: 8px; background: var(--kb-primary); color: #fff; cursor: pointer; }
 .kb-ai-a { padding: 0 16px 18px; max-height: 50vh; overflow: auto; white-space: pre-wrap; line-height: 1.7; }
 
+/* ===========================================================================
+   知识编辑页（wiki_node_edit.html）：所见即所得编辑器
+   ---------------------------------------------------------------------------
+   编辑区直接复用阅读页的 .kb-prose 排版 —— 编辑态的字号、行高、标题阶梯、
+   列表符号、引用竖线、表格留白与阅读页完全同源，所以「在编辑器里看到的」
+   就是「保存后读到的」，不存在两套版式。这里只补编辑器特有的"可操作痕迹"：
+   吸顶工具栏、单元格聚焦态、表格工具条、空文档占位提示。
+   =========================================================================== */
+.kb-toolbar {
+  position: sticky;
+  /* 让开全局顶栏（--kb-topbar-h）后再吸顶，否则会被顶栏压住 */
+  top: calc(var(--kb-topbar-h) + 6px);
+  z-index: 1020;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-bottom: 0;
+  border-radius: var(--kb-radius) var(--kb-radius) 0 0;
+  box-shadow: var(--kb-shadow);
+}
+.kb-toolbar .kb-tb-btn { display: inline-flex; align-items: center; gap: 4px; font-size: .82rem; white-space: nowrap; }
+/* 高亮 = 光标处已是该格式，再点一次即取消（所见即所得的双向反馈） */
+.kb-toolbar .kb-tb-btn.active { background: var(--kb-primary); border-color: var(--kb-primary); color: #fff; }
+.kb-block-select { width: auto; min-width: 92px; font-size: .82rem; }
+.kb-editor-count {
+  font-size: .78rem; color: var(--kb-muted); white-space: nowrap;
+  margin: 0 8px; font-variant-numeric: tabular-nums;
+}
+/* 源码模式下格式按钮失去意义：整体降透明度并禁用，避免误点后没反应 */
+.kb-toolbar.kb-toolbar-source [data-cmd],
+.kb-toolbar.kb-toolbar-source .kb-block-select { opacity: .4; pointer-events: none; }
+
+.kb-editor {
+  min-height: 480px;
+  padding: 24px 28px 32px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-radius: 0 0 var(--kb-radius) var(--kb-radius);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kb-editor:focus { border-color: var(--kb-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+.kb-editor.kb-editor-empty::after {
+  content: '在这里直接写正文 —— 需要加粗、标题、列表、表格就点上方按钮，不必记语法。';
+  color: var(--kb-muted);
+  font-size: .92em;
+}
+/* 光标所在单元格高亮：表格里编辑时才知道自己改的是哪一格 */
+.kb-editor table td, .kb-editor table th { position: relative; }
+.kb-editor table td.kb-cell-active, .kb-editor table th.kb-cell-active {
+  outline: 2px solid var(--kb-primary);
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, .07);
+}
+.kb-editor a { cursor: text; }
+.kb-editor a:hover { cursor: pointer; }
+
+.kb-editor-src {
+  min-height: 480px;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .88rem;
+}
+
+.kb-tblbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  background: var(--kb-surface);
+  border: 1px solid var(--kb-border);
+  border-radius: 8px;
+  box-shadow: var(--kb-shadow);
+  z-index: 20;
+  font-size: .78rem;
+  white-space: nowrap;
+}
+.kb-tblbar-label { color: var(--kb-muted); margin-right: 2px; }
+
+.kb-editor-hint { margin-top: 8px; font-size: .8rem; color: var(--kb-muted); line-height: 1.7; }
+.kb-draft-bar { font-size: .85rem; }
+.kb-loss-warn { font-size: .9rem; line-height: 1.8; }
+.kb-force-check { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.kb-force-check .form-check-input { margin: 0; }
+
+/* 工具栏轻提示：只解释"为什么此操作在当前位置无意义"，不打扰编辑 */
+.kb-hint-toast {
+  position: fixed; left: 50%; bottom: 90px;
+  transform: translateX(-50%) translateY(12px);
+  background: #111827; color: #fff; padding: 9px 16px; border-radius: 10px;
+  font-size: .85rem; line-height: 1.5; max-width: min(560px, 88vw);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .22);
+  opacity: 0; pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease; z-index: 2300;
+}
+.kb-hint-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* Toast */
 .kb-toast {
   position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%) translateY(20px);
@@ -468,18 +763,73 @@ a:hover { color: var(--kb-primary-hover); }
 .kb-dir { font-weight: 600; color: var(--kb-text); }
 .kb-file { color: var(--kb-muted); }
 
-/* 阅读页右侧边栏：吸顶常驻，随正文滚动时保持可见（需让开全局顶栏的高度） */
+/* ---------------------------- 组件层：批注台 ----------------------------
+   ① 卡片之间用 flex gap 统一间距，不再依赖 mb-3，避免双倍留白；
+   ② 独立底纹 + 左侧主色强调线，把「批注」与「正文」分成两个一眼可分的平面；
+   ③ 宽屏吸顶常驻，窄屏（已退单栏）随正文自然排布；
+   ④ 辅助文案用实色 --kb-note-muted，替代 .75 透明灰在底纹上的发虚。 */
+.kb-reader-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* 并排布局下批注台吸顶常驻：随正文滚动始终留在视口内（让开全局顶栏高度）。
+   断点必须与上面的单栏断点一致（992），否则会出现「并排但不吸顶」的中间态。 */
 @media (min-width: 992px) {
   .kb-reader-side {
     position: sticky;
-    top: calc(var(--kb-topbar-h, 64px) + 12px);
-    align-self: flex-start;
-    max-height: calc(100vh - var(--kb-topbar-h, 64px) - 24px);
+    top: calc(var(--kb-topbar-h, 64px) + 16px);
+    max-height: calc(100vh - var(--kb-topbar-h, 64px) - 32px);
     overflow-y: auto;
     padding-right: 4px;
   }
-  .kb-reader-side::-webkit-scrollbar { width: 5px; }
+  .kb-reader-side::-webkit-scrollbar { width: 6px; }
   .kb-reader-side::-webkit-scrollbar-thumb { background: var(--kb-border); border-radius: 3px; }
+}
+.kb-reader-side .card {
+  margin-bottom: 0;
+  background: var(--kb-note-surface);
+  border: 1px solid var(--kb-note-border);
+  border-left: 3px solid var(--kb-note-accent);
+  border-radius: 10px;
+}
+.kb-reader-side .card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--kb-note-border);
+  color: var(--kb-note-head);
+  font-weight: 650;
+}
+.kb-reader-side .list-group-item {
+  background: transparent;
+  border-color: var(--kb-note-border);
+}
+.kb-reader-side .text-muted,
+.kb-reader-side .kb-note-empty,
+.kb-reader-side .kb-golden-empty {
+  color: var(--kb-note-muted) !important;
+}
+
+/* 批注台标题条：与左侧正文卡头「正文」对称，给整块侧栏一个明确的名字。
+   单栏（<992）下它还是「这里就是批注台」的视觉锚点 —— 批注台被上移到正文之前时，
+   用户第一眼就能确认它还在、并没被移除。 */
+.kb-side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--kb-note-surface);
+  border: 1px solid var(--kb-note-border);
+  border-left: 3px solid var(--kb-note-accent);
+  color: var(--kb-note-head);
+  font-size: .95rem;
+  font-weight: 650;
+}
+.kb-side-head .kb-side-head-tip {
+  margin-left: auto;
+  font-size: .76rem;
+  font-weight: 400;
+  color: var(--kb-note-muted);
 }
 
 /* ---------------- 系统设置 · 架构树状总览 ---------------- */

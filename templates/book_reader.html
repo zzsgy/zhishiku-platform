@@ -11,27 +11,22 @@
   <a href="/bookshelf/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 书架</a>
 </div>
 
-<div class="row">
-  <div class="col-lg-8">
-    <!-- 阅读正文 -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header small fw-semibold d-flex justify-content-between">
-        <span>正文</span>
-        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
-      </div>
-      <div class="card-body">
-        {% if body %}<article class="kb-prose">{{ body|safe }}</article>
-        {% else %}<p class="text-muted">该书暂无可在线阅读的正文。
-        {% if book.source_url %}来源链接：<a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a>
-        <form method="post" action="/bookshelf/book/{{ book.pk }}/retry/" class="d-inline ms-1">
-          {% csrf_token %}<button class="btn btn-sm btn-outline-secondary py-0">重新抓取</button>
-        </form>
-        {% endif %}你仍可在右侧写笔记、管理进度、收录金句。</p>{% endif %}
-      </div>
+{% comment %}
+  结构约束：批注台（aside）必须排在正文（article）**之前**（与 wiki_node.html 同理）。
+  正文可能极长，批注台一旦在 DOM 里落在正文之后，任何一次样式失效都会把它推到
+  正文末尾 —— 用户看到的就是「批注台被删除了」。宽屏的左右分栏由 theme.css 里
+  .kb-reader-main/-side 的 grid-column / grid-row 显式落位实现，不依赖 DOM 顺序。
+{% endcomment %}
+<div class="kb-reader">
+  <aside class="kb-reader-side" id="kbSidePanel" aria-label="批注台">
+    <!-- 批注台：读书笔记 / 阅读进度 / 本书金句。
+         ≥992px 与正文并排（显式落位到右列）并吸顶常驻；<992px 上移到正文之前，
+         保证任何视口、任何样式状态下都一眼可见。 -->
+    <div class="kb-side-head">
+      <i class="bi bi-journal-text"></i> 批注台
+      <span class="kb-side-head-tip">笔记 · 进度 · 金句</span>
     </div>
-  </div>
 
-  <div class="col-lg-4 kb-reader-side">
     <!-- 读书笔记（右侧边栏，阅读时随时查看与编辑） -->
     <div class="card shadow-sm mb-3">
       <div class="card-header small fw-semibold d-flex justify-content-between">
@@ -84,10 +79,29 @@
         {% empty %}<li class="list-group-item text-muted small kb-golden-empty">划句时选「存金句」即可收录。</li>{% endfor %}
       </ul>
     </div>
-  </div>
+  </aside>
+
+  <article class="kb-reader-main">
+    <!-- 阅读正文 -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header small fw-semibold d-flex justify-content-between">
+        <span>正文</span>
+        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
+      </div>
+      <div class="card-body">
+        {% if body %}<article class="kb-prose">{{ body|safe }}</article>
+        {% else %}<p class="text-muted">该书暂无可在线阅读的正文。
+        {% if book.source_url %}来源链接：<a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a>
+        <form method="post" action="/bookshelf/book/{{ book.pk }}/retry/" class="d-inline ms-1">
+          {% csrf_token %}<button class="btn btn-sm btn-outline-secondary py-0">重新抓取</button>
+        </form>
+        {% endif %}你仍可在右侧写笔记、管理进度、收录金句。</p>{% endif %}
+      </div>
+    </div>
+  </article>
 </div>
 {% endblock %}
 {% block extra_js %}
 <script>window.KB_BOOK_ID = {{ book.pk }}; window.KB_BOOK_TITLE = "{{ book.title|escapejs }}";</script>
-<script src="/static/js/selection.js"></script>
+<script src="{% vstatic 'js/selection.js' %}"></script>
 {% endblock %}

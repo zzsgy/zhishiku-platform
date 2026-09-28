@@ -241,15 +241,54 @@
             <option value="dark" {% if cfg.theme == 'dark' %}selected{% endif %}>深色</option>
           </select>
         </div>
-        <div class="col-12">
-          <label class="form-label small">个人表达风格（用于办公平台献策 / 报告）</label>
-          <textarea name="user_style" class="form-control" rows="2" placeholder="例如：简洁务实、善用举例、偏党建公文语气…">{{ cfg.user_style }}</textarea>
-        </div>
         <div class="col-md-6">
           <label class="form-label small">Gitee Token</label>
           <input name="gitee_token" class="form-control" value="{{ cfg.gitee_token }}" placeholder="用于展示 Gitee 仓库列表">
         </div>
         <div class="col-12"><button class="btn btn-primary"><i class="bi bi-save"></i> 保存设置</button></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 个人设定与写作风格 -->
+<div class="card shadow-sm my-4" id="persona">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-person-vcard"></i> 个人设定与写作风格（AI 输出遵循）</span>
+    <span class="badge bg-secondary fw-normal">办公平台「献策 / 生成报告」与 AI 助手会按此输出</span>
+  </div>
+  <div class="card-body">
+    {% if request.GET.saved %}<div class="alert alert-success py-2 mb-3">✅ 已保存。后续由本平台生成的材料将按此设定与风格输出。</div>{% endif %}
+    <p class="small text-muted mb-3">
+      这三段内容会作为「我的个人设定 / 表达风格 / 输出禁忌」注入到 AI 提示词中，用于统一所有生成材料的语气、结构与格式。
+      依据：2026-09-23 对桌面全量文件的写作样本与组织习惯分析（详见知识库「桌面文件归档 · 总索引」）。
+    </p>
+    <form method="post" action="/settings/save/">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label small">个人设定（身份 / 岗位 / 工作场景，用于 AI 理解语境）</label>
+          <textarea name="user_profile" class="form-control font-monospace" rows="10"
+                    style="font-size:.82rem"
+                    placeholder="姓名、单位、岗位、三线职责、服务对象、常用系统…">{{ cfg.user_profile }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">写作风格（文体 / 结构 / 语言 / 格式）</label>
+          <textarea name="user_style" class="form-control font-monospace" rows="14"
+                    style="font-size:.82rem"
+                    placeholder="公文结构、序号层级、小标题习惯、数据化要求…">{{ cfg.user_style }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">输出禁忌（不该出现的写法）</label>
+          <textarea name="user_taboo" class="form-control font-monospace" rows="14"
+                    style="font-size:.82rem"
+                    placeholder="不口语化、不空泛表态、不虚构数据…">{{ cfg.user_taboo }}</textarea>
+        </div>
+        <div class="col-12 d-flex gap-2 align-items-center">
+          <button class="btn btn-primary"><i class="bi bi-save"></i> 保存个人设定与风格</button>
+          <a class="btn btn-outline-secondary" href="/office/">去办公平台试一下</a>
+          <span class="small text-muted">保存后立即生效，无需重启。</span>
+        </div>
       </div>
     </form>
   </div>

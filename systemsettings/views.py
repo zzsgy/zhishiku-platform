@@ -155,6 +155,8 @@ def index(request):
         'platform_name': SystemConfig.get_value('platform_name', '智识库'),
         'theme': SystemConfig.get_value('theme', 'light'),
         'user_style': SystemConfig.get_value('user_style', ''),
+        'user_profile': SystemConfig.get_value('user_profile', ''),
+        'user_taboo': SystemConfig.get_value('user_taboo', ''),
         'gitee_token': gitee_token,
     }
 
@@ -200,12 +202,23 @@ def index(request):
 def save_settings(request):
     if request.method != 'POST':
         return redirect('/settings/')
-    SystemConfig.set_value('platform_name', (request.POST.get('platform_name') or '智识库').strip())
-    SystemConfig.set_value('theme', request.POST.get('theme', 'light'))
-    SystemConfig.set_value('user_style', (request.POST.get('user_style') or '').strip())
-    # 注：dashscope_api_key 已废弃（已迁移进 qwen provider），前端无该输入框，不再死写空串
-    SystemConfig.set_value('gitee_token', (request.POST.get('gitee_token') or '').strip())
+    # 按字段存在与否分别更新：设置页有多个表单，避免某一表单提交时把别的键清空
+    if 'platform_name' in request.POST:
+        SystemConfig.set_value('platform_name', (request.POST.get('platform_name') or '智识库').strip())
+    if 'theme' in request.POST:
+        SystemConfig.set_value('theme', request.POST.get('theme', 'light'))
+    if 'gitee_token' in request.POST:
+        # 注：dashscope_api_key 已废弃（已迁移进 qwen provider），不再死写空串
+        SystemConfig.set_value('gitee_token', (request.POST.get('gitee_token') or '').strip())
+    if 'user_style' in request.POST:
+        SystemConfig.set_value('user_style', (request.POST.get('user_style') or '').strip())
+    if 'user_profile' in request.POST:
+        SystemConfig.set_value('user_profile', (request.POST.get('user_profile') or '').strip())
+    if 'user_taboo' in request.POST:
+        SystemConfig.set_value('user_taboo', (request.POST.get('user_taboo') or '').strip())
     log_operation('settings', 'save')
+    if 'user_profile' in request.POST or 'user_taboo' in request.POST:
+        return redirect('/settings/?saved=1#persona')
     return redirect('/settings/?saved=1')
 
 
