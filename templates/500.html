@@ -1,0 +1,2 @@
+{% extends 'registration/auth_base.html' %}{% block title %}页面暂时不可用 · 智识库{% endblock %}
+{% block auth_content %}{% include '_error_message.html' with error_code='500' error_title='页面暂时无法打开' error_description='请稍后重试。如果持续出现此问题，可联系管理员查看运行诊断。' %}{% endblock %}

@@ -1,11 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}灵感库 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-lightbulb"></i> 灵感库</h2>
-  <a href="/knowledgebase/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> 知识库</a>
-</div>
-<p class="text-muted small">随身小记 · 任何阅读页划句即可收入</p>
+{% include '_page_head.html' with page_title='灵感库' eyebrow='MOMENTS OF INSPIRATION' description='保存闪现的想法，让下一次创作有迹可循。' action_url='/notes/' action_label='记录灵感' %}
+
 
 <div class="row">
   <div class="col-12">

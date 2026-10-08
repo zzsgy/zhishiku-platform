@@ -1,0 +1,2 @@
+{% extends 'registration/auth_base.html' %}{% block title %}访问受限 · 智识库{% endblock %}
+{% block auth_content %}{% include '_error_message.html' with error_code='403' error_title='暂时无法访问' error_description='当前账号没有此操作的权限，或页面已过期。请返回工作台刷新后重试。' %}{% endblock %}

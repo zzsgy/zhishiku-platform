@@ -1,0 +1,25 @@
+{% load kb_extras %}<!doctype html>
+<html lang="zh-CN" data-theme="{{ theme|default:'light' }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}登录 · {{ platform_name|default:'智识库' }}{% endblock %}</title>
+  <link rel="icon" href="{% vstatic 'favicon.svg' %}" type="image/svg+xml">
+  <script src="{% vstatic 'js/theme-init.js' %}"></script>
+  <link rel="stylesheet" href="{% vstatic 'vendor/bootstrap/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% vstatic 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
+  <link rel="stylesheet" href="{% vstatic 'css/theme.css' %}">
+  <link rel="stylesheet" href="{% vstatic 'css/workspace.css' %}">
+  <link rel="stylesheet" href="{% vstatic 'css/auth.css' %}">
+</head>
+<body class="kb-auth-page"><main class="kb-auth-shell">
+  <section class="kb-auth-story" aria-label="个人知识工作台">
+    <div class="kb-auth-brand"><span class="kb-brand-mark"><i class="bi bi-book-half" aria-hidden="true"></i></span><div><strong>{{ platform_name|default:'智识库' }}</strong><small>PERSONAL KNOWLEDGE WORKSPACE</small></div></div>
+    <div class="kb-auth-intro"><span class="kb-eyebrow">连接信息与思考</span><h2>让知识有序，<br>让思考生长。</h2><p>把零散的资料、阅读中的灵感和每天的工作，汇聚成持续积累的个人知识空间。</p></div>
+    <div class="kb-auth-flow" aria-label="收集、整理、连接、创作"><span><i class="bi bi-inbox" aria-hidden="true"></i>收集</span><i class="bi bi-arrow-right" aria-hidden="true"></i><span><i class="bi bi-journal-text" aria-hidden="true"></i>整理</span><i class="bi bi-arrow-right" aria-hidden="true"></i><span><i class="bi bi-diagram-3" aria-hidden="true"></i>连接</span><i class="bi bi-arrow-right" aria-hidden="true"></i><span><i class="bi bi-pencil-square" aria-hidden="true"></i>创作</span></div>
+    <div class="kb-auth-story-footer">每一份积累，都在为下一次思考提供起点。</div>
+  </section>
+  <section class="kb-auth-form-panel" aria-labelledby="authTitle"><div class="kb-auth-form-inner">
+    <div class="kb-auth-mobile-brand"><span class="kb-brand-mark"><i class="bi bi-book-half" aria-hidden="true"></i></span>{{ platform_name|default:'智识库' }}</div>
+    {% block auth_content %}{% endblock %}
+  </div></section>
+</main><script src="{% vstatic 'js/auth.js' %}"></script></body></html>

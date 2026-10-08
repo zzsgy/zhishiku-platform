@@ -2,16 +2,12 @@
 {% load kb_extras %}
 {% block title %}知识库 - {{ platform_name }}{% endblock %}
 {% block content %}
-{% include "_pagination.html" %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2 class="mb-0"><i class="bi bi-archive"></i> 知识库</h2>
-  <span class="text-muted small">知识库 · 灵感库 · 金句库 · 链接库（运行档案库独立存放）</span>
-</div>
+{% include '_page_head.html' with page_title='知识库' eyebrow='KNOWLEDGE LIBRARY' description='让资料沉淀为知识，让每一次积累都能再次找到。' %}
 
 <!-- 展示单元总览：知识库（show_in_kb）+ 金句库 + 链接库；运行档案库通过 show_in_kb=False 已被排除 -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 kb-library-grid">
   {% for b in bases %}
-  <div class="col-md-4">
+  <div class="col-md-6 col-xl-3">
     <a href="/knowledgebase/?base={{ b.pk }}" class="text-decoration-none text-reset d-block h-100" style="cursor:pointer;" aria-label="浏览{{ b.name }}">
       <div class="card shadow-sm h-100 {% if base and base.pk == b.pk %}border-primary{% endif %}">
         <div class="card-body">
@@ -35,7 +31,7 @@
   {% endfor %}
 
   <!-- 金句库（书架汇聚，知识库内展示） -->
-  <div class="col-md-4">
+  <div class="col-md-6 col-xl-3">
     <a href="/knowledgebase/golden/" class="text-decoration-none text-reset d-block h-100" style="cursor:pointer;" aria-label="浏览金句库">
       <div class="card shadow-sm h-100 border-warning-subtle">
         <div class="card-body">
@@ -53,7 +49,7 @@
   </div>
 
   <!-- 链接库（收集中无法解析的链接归档） -->
-  <div class="col-md-4">
+  <div class="col-md-6 col-xl-3">
     <a href="/knowledgebase/links/" class="text-decoration-none text-reset d-block h-100" style="cursor:pointer;" aria-label="浏览链接库">
       <div class="card shadow-sm h-100 border-info-subtle">
         <div class="card-body">
@@ -72,7 +68,7 @@
   </div>
 
   <!-- 灵感库（随身小记，在知识库门户内提供直达入口） -->
-  <div class="col-md-4">
+  <div class="col-md-6 col-xl-3">
     <a href="/inspiration/" class="text-decoration-none text-reset d-block h-100" style="cursor:pointer;" aria-label="浏览灵感库">
       <div class="card shadow-sm h-100 border-secondary-subtle">
         <div class="card-body">
@@ -92,7 +88,7 @@
 
 <!-- 节点列表 -->
 <div class="card shadow-sm">
-  <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span class="fw-semibold"><i class="bi bi-list-ul"></i> 知识节点
       {% if base %}<span class="badge bg-primary">· {{ base.name }}</span>{% endif %}
     </span>
@@ -102,7 +98,7 @@
       <button class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
     </form>
   </div>
-  <div class="card-body p-0">
+  <div class="card-body p-0 table-responsive">
     <table class="table table-hover mb-0">
       <thead><tr><th>标题</th><th>类型</th><th>分类</th><th>标签</th><th>更新</th><th>操作</th></tr></thead>
       <tbody>
@@ -132,4 +128,5 @@
   <a href="/wiki/" class="btn btn-outline-success btn-sm"><i class="bi bi-journal-richtext"></i> 进入 WiKI 层自生长知识</a>
   <a href="/collection/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-collection"></i> 知识收集</a>
 </div>
+{% include "_pagination.html" %}
 {% endblock %}

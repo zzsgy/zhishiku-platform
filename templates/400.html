@@ -1,0 +1,2 @@
+{% extends 'registration/auth_base.html' %}{% block title %}请求未完成 · 智识库{% endblock %}
+{% block auth_content %}{% include '_error_message.html' with error_code='400' error_title='请求未能完成' error_description='请检查提交的信息，或返回工作台重新操作。' %}{% endblock %}

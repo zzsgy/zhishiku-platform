@@ -211,3 +211,4 @@ LOGGING = {
 # simpleui tweaks
 SIMPLEUI_HOME_TITLE = '知识库平台'
 SIMPLEUI_HOME_ICON = 'fa fa-book'
+SIMPLEUI_HOME_INFO = False

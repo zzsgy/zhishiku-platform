@@ -34,7 +34,7 @@ class BrowserFlows(StaticLiveServerTestCase):
             page.on('pageerror', lambda error:errors.append(str(error)))
             page.goto(self.live_server_url + '/office/')
             page.get_by_label('用户名').fill('browser-tester')
-            page.get_by_label('密码').fill('browser-tests-only-123')
+            page.get_by_label('密码', exact=True).fill('browser-tests-only-123')
             page.get_by_role('button', name='登录', exact=True).click()
             page.wait_for_url('**/office/')
             page.locator('[data-office-tab="files"]').click()

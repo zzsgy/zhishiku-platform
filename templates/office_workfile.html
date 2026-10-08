@@ -2,9 +2,7 @@
 {% load kb_extras %}
 {% block title %}{{ wf.title }} - 工作文件 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="mb-3">
-  <a href="/office/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> 返回办公平台</a>
-</div>
+{% include '_page_head.html' with page_title=wf.title eyebrow='WORK FILES' description='集中查看工作资料，继续你的阅读与整理。' action_url='/office/#files' action_label='返回工作文件' %}
 
 <div class="card shadow-sm">
   <div class="card-header bg-transparent fw-semibold d-flex align-items-center gap-2 flex-wrap">

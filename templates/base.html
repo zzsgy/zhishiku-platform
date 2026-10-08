@@ -15,9 +15,12 @@
     「批注台明明修好了却显示被移除」的真因。详见 core/templatetags/kb_extras.py。
   {% endcomment %}
   <link href="{% vstatic 'css/theme.css' %}" rel="stylesheet">
+  <script src="{% vstatic 'js/theme-init.js' %}"></script>
+  <link href="{% vstatic 'css/workspace.css' %}" rel="stylesheet">
   {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="kb-workspace" data-module="{{ active_module }}">
+  <a href="#mainContent" class="kb-skip-link">跳到正文</a>
   <aside class="kb-sidebar" id="kbSidebar">
     <div class="kb-sidebar-brand">
       <span class="kb-brand-mark"><i class="bi bi-book-half"></i></span>
@@ -30,7 +33,7 @@
       </button>
     </div>
 
-    <nav class="kb-sidebar-nav">
+    <nav class="kb-sidebar-nav" aria-label="主导航">
       <div class="kb-nav-group-label">工作台</div>
       <a class="kb-nav-item {% if active_module == 'dashboard' %}active{% endif %}" href="/" title="总览">
         <i class="bi bi-house-door"></i>
@@ -89,10 +92,11 @@
     </nav>
 
     <div class="kb-sidebar-footer">
-      <button class="kb-theme-toggle" id="themeToggle" title="切换主题">
+      <button type="button" class="kb-theme-toggle" id="themeToggle" title="切换主题" aria-label="切换明暗主题">
         <i class="bi bi-circle-half"></i>
         <span>主题</span>
       </button>
+      <form method="post" action="{% url 'logout' %}" class="mt-2">{% csrf_token %}<button type="submit" class="kb-theme-toggle"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>退出登录</span></button></form>
     </div>
   </aside>
   <button class="kb-sidebar-backdrop" id="kbSidebarBackdrop" type="button" aria-label="关闭导航"></button>
@@ -111,7 +115,7 @@
         <button type="button" class="kb-menu-toggle" id="kbMenuToggle" aria-label="打开导航">
           <i class="bi bi-list"></i>
         </button>
-        <span class="kb-topbar-title"><i class="bi bi-search"></i> 搜索</span>
+        <span class="kb-topbar-title"><span>工作空间</span><span class="kb-topbar-divider">/</span><strong>{{ module_title }}</strong></span>
         <form class="kb-global-search" method="get" action="/office/search/" role="search">
           <i class="bi bi-search kb-global-search-icon" aria-hidden="true"></i>
           <input type="text" name="q" class="form-control form-control-sm" value="{{ global_search_q|default:'' }}"
@@ -141,9 +145,10 @@
           <input type="hidden" name="scopes" class="kb-scope-input" value="kb,office">
           <button class="btn btn-sm btn-primary kb-search-submit" type="submit"><i class="bi bi-search"></i><span>搜索</span></button>
         </form>
+        <div class="dropdown kb-account"><button class="kb-account-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="账号菜单"><span class="kb-avatar">{{ user.get_username|slice:':1' }}</span><span class="kb-account-name small">{{ user.get_username }}</span><i class="bi bi-chevron-down small" aria-hidden="true"></i></button><div class="dropdown-menu dropdown-menu-end kb-account-menu"><div class="dropdown-header">{{ user.get_username }}</div><a class="dropdown-item" href="{% url 'password_change' %}"><i class="bi bi-key me-2" aria-hidden="true"></i>修改密码</a>{% if user.is_staff %}<a class="dropdown-item" href="/admin/"><i class="bi bi-grid me-2" aria-hidden="true"></i>管理中心</a>{% endif %}<div class="dropdown-divider"></div><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>退出登录</button></form></div></div>
       </div>
     </div>
-    <div class="kb-main-inner">
+    <div class="kb-main-inner" id="mainContent" tabindex="-1">
       {% block content %}{% endblock %}
     </div>
     <footer class="kb-footer small">

@@ -1,0 +1,5 @@
+{% extends 'admin/index.html' %}
+{% load kb_extras %}
+{% block title %}<title>管理中心 · {{ platform_name }}</title>{% endblock %}
+{% block css %}{{ block.super }}<script src="{% vstatic 'js/theme-init.js' %}"></script><link rel="stylesheet" href="{% vstatic 'css/admin-workspace.css' %}">{% endblock %}
+{% block logo %}<div class="logo-wrap" v-if="!fold"><a class="kb-admin-brand" href="/"><img src="{% vstatic 'favicon.svg' %}" alt=""><span>{{ platform_name }}<small>管理中心</small></span></a></div>{% endblock %}

@@ -1,8 +1,11 @@
-{% extends 'base.html' %}{% block content %}
-<h1>核对 AI 候选修订</h1><p>{{ node.title }} · 基于版本 {{ proposal.base_version }}</p>
-<p>分类：{{ node.category }} → {{ proposal.proposed.category }}；标签：{{ node.tags }} → {{ proposal.proposed.tags }}</p>
-<pre style="white-space:pre-wrap">{{ diff }}</pre>
-{% if proposal.status == 'pending' %}<form method="post">{% csrf_token %}
-<button name="action" value="accept" class="btn btn-primary">采纳修订</button>
-<button name="action" value="reject" class="btn btn-outline-secondary">拒绝修订</button></form>{% else %}<p>此修订已处理。</p>{% endif %}
+{% extends 'base.html' %}
+{% block title %}核对修订 - {{ node.title }}{% endblock %}
+{% block content %}
+<div class="kb-page-head"><div><span class="kb-eyebrow">REVIEW BEFORE SAVING</span><h1>核对 AI 候选修订</h1><p>{{ node.title }} · 基于版本 {{ proposal.base_version }}</p></div><a class="btn btn-outline-secondary" href="/wiki/node/{{ node.pk }}/">返回知识页</a></div>
+<div class="card"><div class="card-body"><p class="small text-muted">分类：{{ node.category }} → {{ proposal.proposed.category }}<br>标签：{{ node.tags }} → {{ proposal.proposed.tags }}</p>
+<pre class="kb-diff">{{ diff }}</pre>
+{% if proposal.status == 'pending' %}<form method="post" class="d-flex gap-2 mt-4">{% csrf_token %}
+<button name="action" value="accept" class="btn btn-primary"><i class="bi bi-check2"></i>采纳修订</button>
+<button name="action" value="reject" class="btn btn-outline-secondary">拒绝修订</button></form>{% else %}<div class="alert alert-info mt-3 mb-0">此修订已处理。</div>{% endif %}
+</div></div>
 {% endblock %}

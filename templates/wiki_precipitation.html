@@ -1,15 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}知识沉淀 - 智识库{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div>
-    <h2 class="mb-0"><i class="bi bi-arrow-down-circle"></i> 知识沉淀</h2>
-    <p class="text-muted small mb-0">将知识库 / 办公平台产生的文件交给 AI 提炼核心信息，沉淀进 WiKI 知识层。原始资料始终只读，提炼产物为独立草稿，可「采纳 / 编辑 / 丢弃」。</p>
-  </div>
-  <div>
-    <a href="/wiki/" class="btn btn-outline-secondary btn-sm">返回 WiKI 层</a>
-  </div>
-</div>
+{% include '_page_head.html' with page_title='待整理知识' eyebrow='REFINE YOUR KNOWLEDGE' description='从资料中提炼知识，核对后再采纳；原始资料始终保留。' action_url='/wiki/' action_label='返回 Wiki' %}
 
 <div class="row">
   <div class="col-lg-7">

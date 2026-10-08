@@ -3,9 +3,9 @@
 {% block title %}{{ book.title }} - 书架{% endblock %}
 {% block content %}
 {% if book.asset %}<p><a href="/media/{{ book.asset.storage_path }}">下载原件：{{ book.asset.original_name }}</a></p>{% endif %}
-<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+<div class="kb-document-head d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
   <div>
-    <h2 class="mb-0"><i class="bi bi-book"></i> {{ book.title }}</h2>
+    <h1 class="mb-0"><i class="bi bi-book"></i> {{ book.title }}</h1>
         <p class="text-muted small mb-0">{{ book.author|default:'—' }} · {{ book.category|default:'未分类' }}</p>
         {% if book.source_url %}<p class="small mb-0"><i class="bi bi-link-45deg"></i> <a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a></p>{% endif %}
       </div>

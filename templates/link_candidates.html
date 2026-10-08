@@ -1,5 +1,8 @@
 {% extends 'base.html' %}
+{% block title %}选择关联知识 - {{ platform_name }}{% endblock %}
 {% block content %}
-<h1>选择关联知识</h1><p>存在多个名为「{{ title }}」的正式知识。请选择目标；后续可用 [[id:节点编号|显示名]] 建立稳定关联。</p>
-{% for node in nodes %}<p><a href="/wiki/node/{{ node.pk }}/">{{ node.title }}</a> · {{ node.base.name }} · 节点 {{ node.pk }}</p>{% endfor %}
+{% include '_page_head.html' with page_title='选择关联知识' eyebrow='CONNECT THE RIGHT KNOWLEDGE' description='有多个同名条目，请选择这次需要关联的知识。' action_url='/wiki/' action_label='返回 Wiki' %}
+<div class="card"><div class="card-body"><p class="small text-muted">存在多个名为「{{ title }}」的正式知识。</p>
+{% for node in nodes %}<a class="kb-recent-item" href="/wiki/node/{{ node.pk }}/"><span class="kb-recent-icon"><i class="bi bi-file-earmark-text"></i></span><span><strong>{{ node.title }}</strong><small>{{ node.base.name }} · 节点 {{ node.pk }}</small></span><i class="bi bi-arrow-right"></i></a>{% endfor %}
+</div></div><p class="small text-muted mt-3">后续可用 <code>[[id:节点编号|显示名]]</code> 建立稳定关联。</p>
 {% endblock %}

@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block title %}{{ rep.title }} - 办公平台{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+<div class="kb-document-head d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
   <div>
-    <h2 class="mb-1"><i class="bi bi-file-earmark-text"></i> {{ rep.title }}</h2>
+    <h1 class="mb-1"><i class="bi bi-file-earmark-text"></i> {{ rep.title }}</h1>
     <p class="text-muted small mb-0">
       <span class="badge bg-primary-subtle text-primary-emphasis">{{ rep.get_kind_display }}</span>
       {% if rep.range_label %}<span class="ms-1">报告区间 {{ rep.range_label }}</span>{% endif %}

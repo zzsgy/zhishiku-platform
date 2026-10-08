@@ -9,14 +9,8 @@
   0 命中的范围也保留分组并明示，保证聚合透明。
   （本文件多行注释必须用 comment 块语法，行内 {# #} 不支持跨行，跨行会原文泄漏到页面。）
 {% endcomment %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-globe2"></i> 全网检索</h2>
-  <a href="/office/#office-search" class="btn btn-outline-secondary btn-sm">到办公平台统一搜索</a>
-</div>
-<p class="text-muted small">
-  在任意页面使用顶部搜索栏即可发起；范围支持「知识库 / 办公平台 / 全网」单选、多选或全选（顶栏「范围」下拉）。
-  本页按固定顺序分组聚合，每条结果均注明出处。
-</p>
+{% include '_page_head.html' with page_title='搜索结果' eyebrow='FIND YOUR KNOWLEDGE' description='连接知识、工作资料与外部信息，找到下一步思考的线索。' action_url='/office/' action_label='返回办公中心' %}
+
 
 {% if q %}
   <p class="text-muted small">

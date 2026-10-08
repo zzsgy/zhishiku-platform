@@ -1,0 +1,6 @@
+{% extends 'admin/base_site.html' %}
+{% load kb_extras %}
+{% block title %}{{ title }} · 管理中心 · {{ platform_name }}{% endblock %}
+{% block extrastyle %}{{ block.super }}<link href="{% vstatic 'css/admin-workspace.css' %}" rel="stylesheet">{% endblock %}
+{% block extrahead %}{{ block.super }}<script src="{% vstatic 'js/theme-init.js' %}"></script>{% endblock %}
+{% block branding %}<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ platform_name }} · 管理中心</a></h1>{% endblock %}

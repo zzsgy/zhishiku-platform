@@ -1,0 +1,4 @@
+<div class="kb-page-head">
+  <div><span class="kb-eyebrow">{{ eyebrow }}</span><h1>{{ page_title }}</h1>{% if description %}<p>{{ description }}</p>{% endif %}</div>
+  {% if action_url %}<div class="kb-page-actions"><a href="{{ action_url }}" class="btn btn-outline-primary">{% if action_icon %}<i class="bi {{ action_icon }}" aria-hidden="true"></i>{% endif %}{{ action_label }}</a></div>{% endif %}
+</div>

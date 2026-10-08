@@ -2,10 +2,7 @@
 {% load kb_extras %}
 {% block title %}自媒体 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0"><i class="bi bi-megaphone"></i> 自媒体</h2>
-  <span class="text-muted small">选题与文案草稿工作台</span>
-</div>
+{% include '_page_head.html' with page_title='自媒体' eyebrow='IDEAS TO STORIES' description='从一个想法出发，整理选题、打磨文案，积累你的创作。' %}
 
 <div class="card shadow-sm mb-4">
   <div class="card-body">

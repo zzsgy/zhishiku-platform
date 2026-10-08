@@ -7,9 +7,9 @@ try { var key='kbmd:{{ draft_namespace }}:{{ node.pk }}'; var draft=JSON.parse(l
 </script>{% endif %}
 {% if node.export_status == 'failed' %}<p role="status" class="alert alert-warning">正文已入库，导出未完成。管理员可在诊断页重试。</p>{% endif %}
 {% if node.asset %}<p><a href="/media/{{ node.asset.storage_path }}">下载原件：{{ node.asset.original_name }}</a></p>{% endif %}
-<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+<div class="kb-document-head d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
   <div>
-    <h2 class="mb-0">{{ node.title }}</h2>
+    <h1 class="mb-0">{{ node.title }}</h1>
     <p class="text-muted small mb-0">
       {{ node.get_node_type_display }}
       {% if node.category %}· {{ node.category }}{% endif %}

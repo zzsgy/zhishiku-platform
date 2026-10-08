@@ -1,12 +1,15 @@
 {% extends "base.html" %}
+{% block title %}知识回收站 - {{ platform_name }}{% endblock %}
 {% block content %}
-<h1>知识回收站</h1>
-<p>正文、笔记、金句、修订和关系一起保留。恢复遇到编号或关联冲突时会停止，不覆盖当前内容。</p>
+{% include '_page_head.html' with page_title='知识回收站' eyebrow='KEEP A WAY BACK' description='正文、笔记、金句、修订和关系一起保留，给每一份积累留下找回的机会。' action_url='/wiki/' action_label='返回 Wiki' %}
+<div class="card"><div class="card-body">
 {% for entry in entries %}
-<div class="d-flex justify-content-between border-bottom py-3">
-<span>原节点 {{ entry.original_id }} · {{ entry.created }}</span>
+<div class="kb-status-row">
+<span><strong>知识条目 #{{ entry.original_id }}</strong><small class="d-block text-muted mt-1">{{ entry.created|date:'Y-m-d H:i' }}</small></span>
 <form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ entry.pk }}"><button class="btn btn-sm btn-primary">恢复</button></form>
 </div>
-{% empty %}<p>回收站为空。</p>{% endfor %}
+{% empty %}<div class="kb-empty-state"><i class="bi bi-trash3"></i><span>回收站为空</span></div>{% endfor %}
+</div></div>
+<p class="small text-muted mt-3">恢复遇到编号或关联冲突时会停止，不覆盖当前内容。</p>
 {% include "_pagination.html" %}
 {% endblock %}

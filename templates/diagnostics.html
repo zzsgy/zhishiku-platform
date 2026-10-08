@@ -1,12 +1,18 @@
 {% extends 'base.html' %}
+{% block title %}运行诊断 - {{ platform_name }}{% endblock %}
 {% block content %}
-<h1>运行诊断</h1>
-<p>程序所在磁盘剩余 {{ free_gb }} GB · <a href="/settings/">返回设置</a></p>
-{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
-<h2>导出未完成</h2>
-{% for node in failed_exports %}<div class="d-flex justify-content-between border-bottom py-2"><span><a href="/wiki/node/{{ node.pk }}/">{{ node.title }}</a> · {{ node.export_error }}</span><form method="post">{% csrf_token %}<input type="hidden" name="node" value="{{ node.pk }}"><button class="btn btn-sm btn-primary">重试导出</button></form></div>{% empty %}<p>当前没有失败的知识导出。</p>{% endfor %}
-<h2>排队与执行中的任务</h2>
-{% for job in active_jobs %}<p>{{ job.kind }} #{{ job.pk }} · {{ job.status }} · {{ job.created }}</p>{% empty %}<p>当前没有活动任务。</p>{% endfor %}
-<h2>最近失败的任务</h2>
-{% for job in failed_jobs %}<p>{{ job.kind }} #{{ job.pk }} · {{ job.error }}</p>{% empty %}<p>当前没有失败任务。</p>{% endfor %}
+{% include '_page_head.html' with page_title='运行诊断' eyebrow='WORKSPACE HEALTH' description='查看任务与导出状态，让每一份知识都妥善保存。' action_url='/settings/' action_label='返回设置' %}
+{% for message in messages %}<div class="alert alert-info" role="status">{{ message }}</div>{% endfor %}
+<div class="card mb-4"><div class="card-body d-flex align-items-center gap-3"><span class="kb-action-icon"><i class="bi bi-hdd" aria-hidden="true"></i></span><div><strong>磁盘可用空间</strong><div class="small text-muted">程序所在磁盘剩余 {{ free_gb }} GB</div></div></div></div>
+<div class="kb-health-grid">
+  <section class="card"><div class="card-header"><i class="bi bi-file-earmark-arrow-down me-2"></i>待完成导出</div><div class="card-body">
+  {% for node in failed_exports %}<div class="kb-status-row"><div><a href="/wiki/node/{{ node.pk }}/">{{ node.title }}</a><p class="small text-muted mb-0">{{ node.export_error }}</p></div><form method="post">{% csrf_token %}<input type="hidden" name="node" value="{{ node.pk }}"><button class="btn btn-sm btn-primary text-nowrap">重试</button></form></div>{% empty %}<div class="kb-empty-state"><i class="bi bi-check2-circle"></i><span>知识导出正常</span></div>{% endfor %}
+  </div></section>
+  <section class="card"><div class="card-header"><i class="bi bi-hourglass-split me-2"></i>活动任务</div><div class="card-body">
+  {% for job in active_jobs %}<div class="kb-status-row"><div><strong>{{ job.kind }} #{{ job.pk }}</strong><div class="small text-muted">{{ job.created|date:'m-d H:i' }}</div></div><span class="badge bg-primary-subtle text-primary-emphasis">{{ job.status }}</span></div>{% empty %}<div class="kb-empty-state"><i class="bi bi-cup-hot"></i><span>当前没有活动任务</span></div>{% endfor %}
+  </div></section>
+  <section class="card"><div class="card-header"><i class="bi bi-exclamation-circle me-2"></i>最近失败任务</div><div class="card-body">
+  {% for job in failed_jobs %}<div class="kb-status-row"><div><strong>{{ job.kind }} #{{ job.pk }}</strong><p class="small text-muted mb-0">{{ job.error }}</p></div></div>{% empty %}<div class="kb-empty-state"><i class="bi bi-check2-circle"></i><span>当前没有失败任务</span></div>{% endfor %}
+  </div></section>
+</div>
 {% endblock %}

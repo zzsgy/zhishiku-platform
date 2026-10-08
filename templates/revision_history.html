@@ -1,5 +1,8 @@
-{% extends 'base.html' %}{% block content %}<h1>{{ node.title }} · 修订历史</h1>
-<p>当前版本 {{ node.version }}。恢复历史会生成新的修订，当前正文仍可找回。</p>
-{% for r in revisions %}<details><summary>版本 {{ r.version }} · {{ r.created }}</summary><pre style="white-space:pre-wrap">{{ r.snapshot.content_md }}</pre>
-<form method="post">{% csrf_token %}<input type="hidden" name="version" value="{{ node.version }}"><button name="revision" value="{{ r.pk }}">恢复此版本</button></form></details>
-{% empty %}<p>尚无历史修订。</p>{% endfor %}{% endblock %}
+{% extends 'base.html' %}
+{% block title %}修订历史 - {{ node.title }}{% endblock %}
+{% block content %}
+<div class="kb-page-head"><div><span class="kb-eyebrow">KNOWLEDGE HISTORY</span><h1>修订历史</h1><p>{{ node.title }} · 当前版本 {{ node.version }}。恢复历史会生成新的修订，当前正文仍可找回。</p></div><a class="btn btn-outline-primary" href="/wiki/node/{{ node.pk }}/">返回知识页</a></div>
+{% for r in revisions %}<details class="kb-history-entry"><summary>版本 {{ r.version }} <span class="small text-muted ms-2">{{ r.created|date:'Y-m-d H:i' }}</span></summary><pre class="kb-diff">{{ r.snapshot.content_md }}</pre>
+<form method="post" class="mt-3">{% csrf_token %}<input type="hidden" name="version" value="{{ node.version }}"><button class="btn btn-outline-primary" name="revision" value="{{ r.pk }}"><i class="bi bi-arrow-counterclockwise"></i>恢复此版本</button></form></details>
+{% empty %}<div class="card"><div class="kb-empty-state"><i class="bi bi-clock-history"></i><span>尚无历史修订</span><span class="small">保存知识页后，将在这里留下修订记录。</span></div></div>{% endfor %}
+{% endblock %}

@@ -1,0 +1,2 @@
+{% extends 'registration/auth_base.html' %}{% block title %}页面未找到 · 智识库{% endblock %}
+{% block auth_content %}{% include '_error_message.html' with error_code='404' error_title='这一页暂时找不到' error_description='链接可能已经变更，或内容已移入回收站。回到工作台，继续寻找你的知识。' %}{% endblock %}

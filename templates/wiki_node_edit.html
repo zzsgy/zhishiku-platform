@@ -2,7 +2,7 @@
 {% load kb_extras %}
 {% block title %}{% if node %}编辑{% else %}新建{% endif %}知识页 - {{ platform_name }}{% endblock %}
 {% block content %}
-<h2 class="mb-3">{% if node %}<i class="bi bi-pencil"></i> 编辑：{{ node.title }}{% else %}<i class="bi bi-plus-lg"></i> 新建知识页{% endif %}</h2>
+<div class="kb-page-head"><div><span class="kb-eyebrow">WRITE & CONNECT</span><h1>{% if node %}<i class="bi bi-pencil"></i> 编辑：{{ node.title }}{% else %}<i class="bi bi-plus-lg"></i> 新建知识页{% endif %}</h1><p>整理思考，为知识建立清晰的结构与联系。</p></div></div>
 
 {% if loss_warning %}
 <div class="alert alert-warning kb-loss-warn">
@@ -16,7 +16,7 @@
 {% endcomment %}
 <div id="mdDraftBar" class="alert alert-info d-none d-flex flex-wrap align-items-center gap-2 kb-draft-bar"></div>
 
-<form method="post" id="mdForm" action="{% if node %}/wiki/node/{{ node.pk }}/edit/{% else %}/wiki/create/{% endif %}">
+<form method="post" id="mdForm" class="kb-edit-panel" action="{% if node %}/wiki/node/{{ node.pk }}/edit/{% else %}/wiki/create/{% endif %}">
   {% csrf_token %}
   {% if node %}<input type="hidden" name="version" value="{{ node.version }}">{% endif %}
   <div class="row g-3">

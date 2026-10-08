@@ -2,14 +2,13 @@
 {% load kb_extras %}
 {% block title %}系统设置 - {{ platform_name }}{% endblock %}
 {% block content %}
-<a class="btn btn-sm btn-outline-secondary mb-3" href="/settings/diagnostics/">查看运行诊断与重试导出</a>
 <div class="kb-page-head">
   <div>
     <span class="kb-eyebrow">SETTINGS</span>
     <h1>系统设置</h1>
     <p>管理工作台、AI 服务、外部连接与数据备份。</p>
   </div>
-  <span class="kb-version-chip">Django 5.2</span>
+  <div class="kb-page-actions"><a href="/accounts/password_change/" class="btn btn-outline-secondary"><i class="bi bi-key"></i>修改密码</a><a class="btn btn-outline-primary" href="/settings/diagnostics/"><i class="bi bi-activity"></i>运行诊断</a></div>
 </div>
 
 <nav class="kb-workspace-tabs kb-settings-tabs" id="settingsTabs" aria-label="系统设置分类">

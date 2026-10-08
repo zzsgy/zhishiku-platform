@@ -168,7 +168,7 @@ def link_library(request):
     total = LinkItem.objects.count()
     domains = list(LinkItem.objects.values_list('domain', flat=True).distinct()[:30])
 
-    page = paginate(request, qs.order_by('-created', '-pk'), 50)
+    page = paginate(request, qs.order_by('-collected_at', '-pk'), 50)
     return render(request, 'kb_links.html', {
         'items': page, 'page_obj': page,
         'pending': pending, 'archived': archived, 'invalid': invalid, 'total': total,

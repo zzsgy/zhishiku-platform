@@ -1,12 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}链接库 - {{ platform_name }}{% include "_pagination.html" %}
-{% endblock %}
+{% block title %}链接库 - {{ platform_name }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0"><i class="bi bi-link-45deg"></i> 链接库</h2>
-  <a href="/knowledgebase/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> 知识库</a>
-</div>
-<p class="text-muted small">知识收集过程中解析失败或无法解析的链接在此归档，可统一回访、重试解析或作废。</p>
+{% include '_page_head.html' with page_title='链接库' eyebrow='LINKS & REFERENCES' description='集中管理来源链接，回访、重试，让重要的信息始终可追溯。' action_url='/collection/' action_label='收集链接' %}
+
 
 <!-- 统计卡 -->
 <div class="row g-2 mb-3">
@@ -119,5 +115,4 @@ function delLink(pk){
   });
 }
 </script>
-{% include "_pagination.html" %}
 {% endblock %}
