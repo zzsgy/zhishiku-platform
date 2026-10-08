@@ -89,6 +89,8 @@ class ReaderTests(IsolatedCase):
     def test_rtf_unicode_and_old_doc_fallback_keep_original(self):
         book=self.book('.rtf',br'{\rtf1\ansi First\par\u20013?\u25991?}')
         html=preview(book)['html'];self.assertIn('中文',html);self.assertNotIn('\\rtf1',html)
+        book=self.book('.rtf',r'{\rtf1\ansi\ansicpg936 中文正文}'.encode('gbk'))
+        self.assertIn('中文正文',preview(book)['html'])
         raw=b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'+b'\x00'*64
         book=self.book('.doc',raw)
         response=self.client.get(f'/bookshelf/book/{book.pk}/preview/')

@@ -253,7 +253,14 @@ def preview(book):
         from .vendor.striprtf.striprtf import rtf_to_text
         if len(raw) > 4 * 1024**2:
             raise ValueError('RTF 超过正文预览大小限制，请下载原件阅读。')
-        decoded = rtf_to_text(raw.decode('latin-1'), errors='strict')
+        codepage = re.search(br'\\ansicpg(\d{1,5})\b', raw[:4096])
+        encoding = 'cp' + codepage.group(1).decode('ascii') if codepage else 'cp1252'
+        if encoding == 'cp65001':
+            encoding = 'utf-8'
+        try:
+            decoded = rtf_to_text(raw.decode(encoding), encoding=encoding, errors='strict')
+        except (LookupError, UnicodeDecodeError) as exc:
+            raise ValueError('RTF 编码无法可靠识别，请下载原件或另存为 DOCX 后阅读。') from exc
         html = ''.join('<p class="reader-plain-paragraph">' + escape(p) + '</p>' for p in re.split(r'\n\s*\n', decoded))
         warnings.append('RTF 提供文字阅读；样式、图片和公式请对照原件。')
     else:
