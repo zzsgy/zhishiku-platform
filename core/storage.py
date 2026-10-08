@@ -12,7 +12,7 @@ TEXT_EXTENSIONS = {'.txt', '.text', '.md', '.markdown', '.csv', '.tsv', '.json',
                    '.log', '.xml', '.yaml', '.yml', '.py', '.js', '.css', '.sql',
                    '.ini', '.cfg', '.rtf', '.html', '.htm'}
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
-DOCUMENT_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx'}
+DOCUMENT_EXTENSIONS = {'.pdf', '.doc', '.docx', '.xlsx', '.pptx'}
 
 
 def inside(path, root):
@@ -69,6 +69,8 @@ def validate_file(path, extension):
         raise ValueError('文件内容与允许格式不符')
     if extension == '.pdf' and not head.startswith(b'%PDF-'):
         raise ValueError('文件不是有效 PDF')
+    if extension == '.doc' and not head.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'):
+        raise ValueError('文件不是有效的旧版 Word 文档；请另存为 DOCX 或 PDF 后上传')
     if extension in {'.docx', '.xlsx', '.pptx'}:
         try:
             with zipfile.ZipFile(path) as archive:

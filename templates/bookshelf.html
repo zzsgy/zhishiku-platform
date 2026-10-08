@@ -33,7 +33,7 @@
           <div class="col-md-2"><label class="form-label small">分类</label><input name="category" class="form-control form-control-sm" placeholder="如 心理/技术"></div>
           <div class="col-md-2"><label class="form-label small">总页数</label><input name="total_pages" type="number" class="form-control form-control-sm" value="0"></div>
           <div class="col-md-2"><label class="form-label small">网页链接（可选）</label><input type="url" name="url" class="form-control form-control-sm" placeholder="https://... 直接按链接添加"></div>
-          <div class="col-md-6"><label class="form-label small">本地文件（可选，支持 txt/md/docx/pdf/xlsx/html/各类文本）</label><input type="file" name="file" class="form-control form-control-sm"></div>
+          <div class="col-md-6"><label class="form-label small">本地文件（PDF / Word / Markdown / TXT / HTML / 表格等）</label><input type="file" name="file" class="form-control form-control-sm"><p class="small text-muted mt-1 mb-0">Word 推荐 DOCX；旧版 DOC 可保存原件，转为 DOCX 或 PDF 后可在线阅读。</p></div>
           <div class="col-12"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> 加入书架</button> <span class="text-muted small">二选一：填网页链接 或 上传本地文件</span></div>
         </form>
       </div>
@@ -56,14 +56,15 @@
       <div class="card-body">
         <div class="d-flex justify-content-between">
           <h6 class="card-title mb-1"><a href="/bookshelf/book/{{ b.pk }}/">{{ b.title }}</a></h6>
-          <span class="badge bg-light text-dark">{{ b.get_status_display }}</span>
+          <span class="badge bg-light text-dark">{{ b.document_format }}</span>
         </div>
         <p class="small text-muted mb-1">{{ b.author|default:'—' }} · {{ b.category|default:'未分类' }}</p>
         <div class="progress mb-2" style="height:6px;">
-          <div class="progress-bar" style="width:{% widthratio b.progress b.total_pages 100 %}%"></div>
+          <div class="progress-bar" style="width:{% if b.reading_position %}{{ b.reading_position.percent|floatformat:0 }}{% else %}{% widthratio b.progress b.total_pages 100 %}{% endif %}%"></div>
         </div>
-        <p class="small text-muted mb-0">进度 {{ b.progress }}{% if b.total_pages %} / {{ b.total_pages }}{% endif %} 页 · {{ b.notes.count }} 笔记</p>
-        <div class="d-flex justify-content-end mt-2">
+        <p class="small text-muted mb-0">{% if b.reading_position %}已读 {{ b.reading_position.percent|floatformat:0 }}%{% if b.document_format == 'PDF' %} · 第 {{ b.reading_position.page }} 页{% endif %}{% else %}{{ b.get_status_display }}{% endif %} · {{ b.notes.count }} 笔记</p>
+        <div class="d-flex justify-content-between mt-3">
+          <a href="/bookshelf/book/{{ b.pk }}/" class="btn btn-sm btn-primary"><i class="bi bi-book"></i> {% if b.reading_position %}继续阅读{% else %}开始阅读{% endif %}</a>
           <form method="post" action="/bookshelf/book/{{ b.pk }}/delete/" onsubmit="return confirm('删除此书籍记录与读书笔记？上传原件仍保留。')">
             {% csrf_token %}
             <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> 删除</button>

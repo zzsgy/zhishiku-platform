@@ -169,7 +169,7 @@
     if (window.KB_NODE_ID) {
       addNoteTo('/knowledgebase/api/note/', { node: window.KB_NODE_ID, location: '', note: selText }, '已加入阅读笔记');
     } else if (window.KB_BOOK_ID) {
-      addNoteTo('/bookshelf/api/note/', { book: window.KB_BOOK_ID, location: '', note: selText }, '已加入读书笔记');
+      addNoteTo('/bookshelf/api/note/', { book: window.KB_BOOK_ID, location: window.KB_READER_LOCATION ? window.KB_READER_LOCATION() : '', note: selText }, '已加入读书笔记');
     }
   }
 
@@ -283,7 +283,7 @@
             ? document.getElementById('kbGoldenCount')
             : document.getElementById('kbNoteCount');
           if (cnt) cnt.textContent = Math.max(0, parseInt(cnt.textContent || '0', 10) - 1);
-          if (!list.querySelector('.list-group-item')) {
+          if (!list.querySelector('li:not(.kb-note-empty):not(.kb-golden-empty)')) {
             var empt = document.createElement('li');
             empt.className = 'list-group-item text-muted small '
               + (list.id === 'kbGoldenList' ? 'kb-golden-empty' : 'kb-note-empty');

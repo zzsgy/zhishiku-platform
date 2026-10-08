@@ -23,6 +23,26 @@ class Book(models.Model):
     def __str__(self):
         return self.title
 
+    @property
+    def document_format(self):
+        from pathlib import Path
+        return Path(self.file_path).suffix.lstrip('.').upper() or '网页'
+
+
+class ReaderPosition(models.Model):
+    """Per-account continuation; existing Book metadata is never rewritten on open."""
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='reader_positions')
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    file_key = models.CharField(max_length=64)
+    page = models.PositiveIntegerField(default=1)
+    offset = models.FloatField(default=0)
+    percent = models.FloatField(default=0)
+    preferences = models.JSONField(default=dict)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['book', 'user'], name='one_reader_position_per_account')]
+
 
 class ReadingNote(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, verbose_name='书籍', related_name='notes')

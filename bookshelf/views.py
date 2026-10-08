@@ -6,7 +6,6 @@ import json
 from html import escape
 from uuid import uuid4
 from core.storage import save_upload, media_path, media_url, atomic_write
-import os
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
 
@@ -48,6 +47,11 @@ def index(request):
         books = books.filter(category=cat)
     if q:
         books = books.filter(title__icontains=q)
+    books = list(books.prefetch_related('notes'))
+    from .models import ReaderPosition
+    positions = {p.book_id: p for p in ReaderPosition.objects.filter(user=request.user, book_id__in=[b.pk for b in books])}
+    for book in books:
+        book.reading_position = positions.get(book.pk)
     categories = [c for c in Book.objects.values_list('category', flat=True).distinct() if c]
     return render(request, 'bookshelf.html', {
         'books': books, 'categories': categories, 'cat': cat, 'q': q, 'err': err,
@@ -136,9 +140,11 @@ def book_view(request, pk):
     goldens = GoldenSentence.objects.filter(
         Q(book=book) | Q(book__isnull=True, source__icontains=book.title)
     ).distinct()
-    body = _read_book_body(book)
+    from .reader_views import reader_config
+    from .reader import safe_link
     return render(request, 'book_reader.html', {
-        'book': book, 'notes': notes, 'goldens': goldens, 'body': body,
+        'book': book, 'notes': notes, 'goldens': goldens, 'reader_config': reader_config(book, request.user),
+        'source_link': safe_link(book.source_url),
     })
 
 

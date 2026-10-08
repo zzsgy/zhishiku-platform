@@ -11,6 +11,7 @@ from starmap import views as starmap_views
 from wiki import views as wiki_views
 from wiki import revisions as revision_views
 from bookshelf import views as bookshelf_views
+from bookshelf import reader_views
 from knowledgebase import views as kb_views
 from inspiration import views as inspiration_views
 from selfmedia import views as selfmedia_views
@@ -47,6 +48,10 @@ urlpatterns = [
     path('bookshelf/add/', bookshelf_views.add, name='bookshelf_add'),
     path('bookshelf/golden/', bookshelf_views.golden_list, name='bookshelf_golden'),
     path('bookshelf/book/<int:pk>/', bookshelf_views.book_view, name='bookshelf_book'),
+    path('bookshelf/book/<int:pk>/original/', reader_views.original_document, name='bookshelf_original'),
+    path('bookshelf/book/<int:pk>/preview/', reader_views.document_preview, name='bookshelf_preview'),
+    path('bookshelf/book/<int:pk>/image/<str:rid>/', reader_views.document_image, name='bookshelf_image'),
+    path('bookshelf/book/<int:pk>/position/', reader_views.save_position, name='bookshelf_position'),
     path('bookshelf/book/<int:pk>/retry/', bookshelf_views.book_retry, name='bookshelf_retry'),
     path('bookshelf/book/<int:pk>/progress/', bookshelf_views.update_progress, name='bookshelf_progress'),
     path('bookshelf/book/<int:pk>/note/', bookshelf_views.add_note, name='bookshelf_note'),

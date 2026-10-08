@@ -1,108 +1,53 @@
 {% extends 'base.html' %}
 {% load kb_extras %}
-{% block title %}{{ book.title }} - 书架{% endblock %}
+{% block title %}{{ book.title }} · 阅读{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% vstatic 'vendor/pdfjs-6.4.299/web/pdf_viewer.css' %}">
+<link rel="stylesheet" href="{% vstatic 'css/reader.css' %}">
+{% endblock %}
 {% block content %}
-{% if book.asset %}<p><a href="/media/{{ book.asset.storage_path }}">下载原件：{{ book.asset.original_name }}</a></p>{% endif %}
-<div class="kb-document-head d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-  <div>
-    <h1 class="mb-0"><i class="bi bi-book"></i> {{ book.title }}</h1>
-        <p class="text-muted small mb-0">{{ book.author|default:'—' }} · {{ book.category|default:'未分类' }}</p>
-        {% if book.source_url %}<p class="small mb-0"><i class="bi bi-link-45deg"></i> <a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a></p>{% endif %}
-      </div>
-  <a href="/bookshelf/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> 书架</a>
-</div>
-
-{% comment %}
-  结构约束：批注台（aside）必须排在正文（article）**之前**（与 wiki_node.html 同理）。
-  正文可能极长，批注台一旦在 DOM 里落在正文之后，任何一次样式失效都会把它推到
-  正文末尾 —— 用户看到的就是「批注台被删除了」。宽屏的左右分栏由 theme.css 里
-  .kb-reader-main/-side 的 grid-column / grid-row 显式落位实现，不依赖 DOM 顺序。
-{% endcomment %}
-<div class="kb-reader">
-  <aside class="kb-reader-side" id="kbSidePanel" aria-label="批注台">
-    <!-- 批注台：读书笔记 / 阅读进度 / 本书金句。
-         ≥992px 与正文并排（显式落位到右列）并吸顶常驻；<992px 上移到正文之前，
-         保证任何视口、任何样式状态下都一眼可见。 -->
-    <div class="kb-side-head">
-      <i class="bi bi-journal-text"></i> 批注台
-      <span class="kb-side-head-tip">笔记 · 进度 · 金句</span>
+<section id="universalReader" class="document-reader" aria-label="文档阅读器">
+  <header class="reader-head">
+    <a href="/bookshelf/" class="reader-back" aria-label="返回书架"><i class="bi bi-arrow-left"></i></a>
+    <div class="reader-title"><div class="reader-kicker"><span>{{ book.document_format }}</span> 阅读空间</div><h1 title="{{ book.title }}">{{ book.title }}</h1><p>{{ book.author|default:'我的书架' }}{% if book.category %} · {{ book.category }}{% endif %}{% if source_link %} · <a href="{{ source_link }}" target="_blank" rel="noopener noreferrer">查看来源</a>{% endif %}</p></div>
+    <a class="reader-download" href="/bookshelf/book/{{ book.pk }}/original/?download=1"><i class="bi bi-download"></i><span>下载原件</span></a>
+  </header>
+  <nav class="reader-toolbar" aria-label="阅读工具">
+    <div class="reader-tool-group">
+      <button id="readerTocToggle" aria-label="显示目录" aria-controls="readerToc" aria-expanded="false"><i class="bi bi-layout-sidebar"></i><span>目录</span></button>
+      <div class="reader-pdf-controls" hidden><button id="readerPrev" aria-label="上一页"><i class="bi bi-chevron-left"></i></button><label class="reader-page-label"><input id="readerPage" type="number" min="1" value="1" aria-label="跳转页码"><span>/ <span id="readerPageTotal">—</span></span></label><button id="readerNext" aria-label="下一页"><i class="bi bi-chevron-right"></i></button><select id="readerZoom" aria-label="缩放"><option value="page-width">适合宽度</option><option value="page-fit">整页</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
     </div>
-
-    <!-- 读书笔记（右侧边栏，阅读时随时查看与编辑） -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header small fw-semibold d-flex justify-content-between">
-        <span><i class="bi bi-pencil-square"></i> 读书笔记（<span id="kbNoteCount">{{ notes|length }}</span>）</span>
-      </div>
-      <div class="card-body">
-        <form method="post" action="/bookshelf/book/{{ book.pk }}/note/" class="row g-2 mb-3">
-          {% csrf_token %}
-          <div class="col-4"><input name="location" class="form-control form-control-sm" placeholder="位置/页码"></div>
-          <div class="col-8"><input name="note" class="form-control form-control-sm" placeholder="写下你的想法…" required></div>
-          <div class="col-12"><button class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-lg"></i> 添加笔记</button></div>
-        </form>
-        <ul class="list-group list-group-flush kb-note-list" id="kbNoteList">
-          {% for n in notes %}
-          <li class="list-group-item">
-            <div class="small text-muted">{% if n.location %}📍 {{ n.location }} · {% endif %}{{ n.created|date:'m-d H:i' }}</div>
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <div class="flex-fill">{{ n.note }}</div>
-              <button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="note" data-id="{{ n.pk }}" title="删除笔记"><i class="bi bi-trash"></i></button>
-            </div>
-          </li>
-          {% empty %}<li class="list-group-item text-muted small kb-note-empty">还没有笔记。选中正文文字可快速「记笔记」。</li>{% endfor %}
-        </ul>
-      </div>
+    <div class="reader-tool-group reader-tools-end">
+      <button id="readerSearchToggle" aria-label="文内搜索" aria-controls="readerSearchbar" aria-expanded="false"><i class="bi bi-search"></i><span>搜索</span></button>
+      <details class="reader-settings" id="readerSettings"><summary aria-label="阅读设置"><i class="bi bi-sliders"></i><span>设置</span></summary><div class="reader-settings-popover"><strong>阅读设置</strong><div class="reader-text-controls"><label>字号 <output id="readerFontValue">18</output><input id="readerFont" type="range" min="14" max="26" value="18"></label><label>行距<select id="readerLine"><option value="1.6">紧凑</option><option value="1.9" selected>舒适</option><option value="2.2">宽松</option></select></label><label>正文宽度<select id="readerWidth"><option value="680">窄</option><option value="820" selected>适中</option><option value="1040">宽</option></select></label></div><p class="reader-pdf-settings" hidden>PDF 保留原版字体，使用缩放调整大小。</p><label>阅读背景<select id="readerPaper"><option value="auto">跟随主题</option><option value="white">清爽白</option><option value="warm">柔和纸张</option><option value="dark">夜间</option></select></label></div></details>
+      <button id="readerNotesToggle" aria-label="显示笔记" aria-controls="kbSidePanel" aria-expanded="false"><i class="bi bi-journal-text"></i><span>笔记</span><span class="reader-count">{{ notes|length }}</span></button>
+      <button id="readerFocus" aria-label="进入专注模式" aria-pressed="false"><i class="bi bi-arrows-fullscreen"></i><span>专注</span></button>
     </div>
-
-    <!-- 进度 -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-body">
-        <h6 class="card-title small">阅读进度</h6>
-        <form method="post" action="/bookshelf/book/{{ book.pk }}/progress/">
-          {% csrf_token %}
-          <div class="d-flex align-items-center gap-2">
-            <input type="range" name="progress" min="0" max="{{ book.total_pages|default:100 }}" value="{{ book.progress }}" class="form-range flex-fill" oninput="pv.value=this.value">
-            <output id="pv">{{ book.progress }}</output>
-          </div>
-          <button class="btn btn-sm btn-outline-primary mt-2 w-100">更新进度</button>
-        </form>
-        <div class="progress mt-2" style="height:6px;">
-          <div class="progress-bar" style="width:{% widthratio book.progress book.total_pages 100 %}%"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 金句 -->
-    <div class="card shadow-sm">
-      <div class="card-header small fw-semibold"><i class="bi bi-quote"></i> 本书金句（<span id="kbGoldenCount">{{ goldens|length }}</span>）</div>
-      <ul class="list-group list-group-flush" id="kbGoldenList">
-        {% for g in goldens %}<li class="list-group-item"><div class="d-flex justify-content-between align-items-start gap-2"><div class="flex-fill"><i class="bi bi-quote text-warning"></i> {{ g.text }}</div><button type="button" class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="golden" data-id="{{ g.pk }}" title="删除金句"><i class="bi bi-trash"></i></button></div></li>
-        {% empty %}<li class="list-group-item text-muted small kb-golden-empty">划句时选「存金句」即可收录。</li>{% endfor %}
-      </ul>
-    </div>
-  </aside>
-
-  <article class="kb-reader-main">
-    <!-- 阅读正文 -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header small fw-semibold d-flex justify-content-between">
-        <span>正文</span>
-        <span class="text-muted">选中文字可「问 AI / 存灵感 / 存金句 / 记笔记」</span>
-      </div>
-      <div class="card-body">
-        {% if body %}<article class="kb-prose">{{ body|safe }}</article>
-        {% else %}<p class="text-muted">该书暂无可在线阅读的正文。
-        {% if book.source_url %}来源链接：<a href="{{ book.source_url }}" target="_blank" rel="noopener">{{ book.source_url }}</a>
-        <form method="post" action="/bookshelf/book/{{ book.pk }}/retry/" class="d-inline ms-1">
-          {% csrf_token %}<button class="btn btn-sm btn-outline-secondary py-0">重新抓取</button>
-        </form>
-        {% endif %}你仍可在右侧写笔记、管理进度、收录金句。</p>{% endif %}
-      </div>
-    </div>
-  </article>
-</div>
+  </nav>
+  <form id="readerSearchbar" class="reader-searchbar" hidden><label for="readerSearch" class="visually-hidden">搜索文档内容</label><i class="bi bi-search"></i><input id="readerSearch" type="search" placeholder="搜索文档中的文字…" autocomplete="off"><output id="readerSearchCount" aria-live="polite"></output><button type="button" id="readerSearchPrev" aria-label="上一个结果"><i class="bi bi-chevron-up"></i></button><button type="submit" aria-label="下一个结果"><i class="bi bi-chevron-down"></i></button><button type="button" id="readerSearchClose" aria-label="关闭搜索"><i class="bi bi-x-lg"></i></button></form>
+  <div class="reader-stage">
+    <aside id="readerToc" class="reader-toc" aria-label="文档目录" hidden><div class="reader-panel-head"><strong id="readerTocTitle">目录</strong><button class="reader-panel-close" data-close="toc" aria-label="关闭目录"><i class="bi bi-x-lg"></i></button></div><nav id="readerTocList" aria-label="章节"><p class="reader-empty">正在读取目录…</p></nav></aside>
+    <main class="reader-viewport" aria-label="文档正文">
+      <div id="readerNotice" class="reader-notice" hidden></div>
+      <div id="readerLoading" class="reader-loading" role="status"><span class="reader-loader"></span><strong>正在打开文档</strong><p>让阅读，回到内容本身。</p></div>
+      <div id="readerError" class="reader-error" hidden role="alert"><i class="bi bi-file-earmark-text"></i><h2>暂时无法预览这份文档</h2><p id="readerErrorText"></p><a href="/bookshelf/book/{{ book.pk }}/original/?download=1" class="btn btn-primary">下载原件</a><button id="readerReload" class="btn btn-outline-secondary">重新打开</button>{% if source_link %}<form method="post" action="/bookshelf/book/{{ book.pk }}/retry/">{% csrf_token %}<button class="btn btn-outline-secondary">重新抓取来源网页</button></form>{% endif %}</div>
+      <div id="pdfContainer" class="reader-scroll kb-prose" hidden><div id="pdfViewer" class="pdfViewer"></div></div>
+      <div id="textContainer" class="reader-scroll" hidden tabindex="0" aria-label="可滚动正文"><article id="readerBody" class="kb-prose reader-prose"></article><div class="reader-end">读到这里，留下一个想法吧。</div></div>
+    </main>
+    <aside class="reader-notes" id="kbSidePanel" aria-label="阅读笔记" hidden>
+      <div class="reader-panel-head"><strong>阅读笔记</strong><button class="reader-panel-close" data-close="notes" aria-label="关闭笔记"><i class="bi bi-x-lg"></i></button></div>
+      <div class="reader-notes-inner"><p class="reader-note-hint">选中文字，可记笔记、存金句或问 AI。</p><form id="readerNoteForm" method="post" action="/bookshelf/book/{{ book.pk }}/note/">{% csrf_token %}<label for="readerNoteLocation">所在位置</label><input id="readerNoteLocation" name="location" class="form-control form-control-sm" maxlength="64" placeholder="页码 / 章节"><label for="readerNoteText">我的想法</label><textarea id="readerNoteText" name="note" class="form-control" rows="4" placeholder="写下触动你的内容…" required maxlength="20000"></textarea><button class="btn btn-primary w-100">保存笔记</button><p id="readerNoteStatus" role="status"></p></form>
+      <h3>笔记 <span id="kbNoteCount">{{ notes|length }}</span></h3><ul class="kb-note-list" id="kbNoteList">{% for n in notes %}<li><div class="reader-note-location">{{ n.location|default:'阅读笔记' }} · {{ n.created|date:'m-d H:i' }}</div><div class="d-flex gap-2"><div class="flex-fill reader-note-content">{{ n.note }}</div><button class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="note" data-id="{{ n.pk }}" aria-label="删除笔记"><i class="bi bi-trash"></i></button></div></li>{% empty %}<li class="kb-note-empty reader-empty">还没有笔记，记录阅读中的第一个想法。</li>{% endfor %}</ul>
+      <h3>金句 <span id="kbGoldenCount">{{ goldens|length }}</span></h3><ul id="kbGoldenList">{% for g in goldens %}<li><div class="d-flex gap-2"><div class="flex-fill">{{ g.text }}</div><button class="btn btn-sm btn-link text-danger p-0 kb-del" data-type="golden" data-id="{{ g.pk }}" aria-label="删除金句"><i class="bi bi-trash"></i></button></div></li>{% empty %}<li class="kb-golden-empty reader-empty">选中正文，点击「存金句」。</li>{% endfor %}</ul></div>
+    </aside>
+  </div>
+  <footer class="reader-status"><span id="readerPosition">准备阅读</span><div class="reader-progress"><span id="readerProgress"></span></div><span id="readerSaveStatus" role="status">自动记住阅读位置</span></footer>
+</section>
+<dialog id="readerPasswordDialog" class="reader-password"><form method="dialog"><h2>这份 PDF 需要密码</h2><label for="readerPassword">文档密码</label><input id="readerPassword" type="password" class="form-control" autocomplete="off"><p id="readerPasswordError" role="status"></p><button value="open" class="btn btn-primary">打开文档</button><button value="cancel" class="btn btn-outline-secondary">取消</button></form></dialog>
+{{ reader_config|json_script:'readerConfig' }}
 {% endblock %}
 {% block extra_js %}
 <script>window.KB_BOOK_ID = {{ book.pk }}; window.KB_BOOK_TITLE = "{{ book.title|escapejs }}";</script>
 <script src="{% vstatic 'js/selection.js' %}"></script>
+<script type="module" src="{% vstatic 'js/reader.mjs' %}"></script>
 {% endblock %}
