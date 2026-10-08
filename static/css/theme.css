@@ -650,6 +650,9 @@ a:hover { color: var(--kb-primary-hover); }
 .kb-workspace-tabs button.is-active small { background: var(--kb-surface); color: var(--kb-primary); }
 [data-office-panel], [data-settings-panel] { display: none !important; }
 [data-office-panel].is-active, [data-settings-panel].is-active { display: block !important; }
+/* 面板本身是 Bootstrap .row 的（办公平台「工作分类标签」#work-cats）：
+   上面那条 display:block 会压掉 .row 的 flex，导致 col-md-4 卡片竖着堆叠 —— 放行 flex。 */
+[data-office-panel].is-active.row { display: flex !important; }
 .kb-settings-tabs { overflow-x: auto; scrollbar-width: thin; }
 .kb-settings-tabs button { flex: 0 0 auto; }
 .kb-version-chip { padding: 5px 9px; border: 1px solid var(--kb-border); border-radius: 999px; color: var(--kb-muted); background: var(--kb-surface); font-size: .72rem; }

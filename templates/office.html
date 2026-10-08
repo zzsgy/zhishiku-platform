@@ -327,7 +327,8 @@
               <!-- 左侧：分类（上） + 状态（下） -->
               <div class="col-lg-3 d-flex flex-column gap-2">
                 <select name="category" class="form-select form-select-sm" title="新建记录的分类">
-                  {% for k,l in cats.items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}
+                  {# 只列三个工作分类（不含归档分类）：新增记录一律未归档，归档走日期卡片的「归档」按钮 #}
+                  {% for k,l in work_cats.items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}
                 </select>
                 <input name="status" class="form-control form-control-sm" placeholder="状态（可选）">
               </div>
@@ -684,8 +685,12 @@
 </div><!-- /#office-scope -->
 
 <script>
-/* 办公中心只展示当前任务工作区，减少长页面堆叠。 */
-(function () {
+/* 办公中心只展示当前任务工作区，减少长页面堆叠。
+   抽成 __officeInitPanels(fallback)：局部刷新（分类卡片/检索/搜索）替换 DOM 后必须重跑，
+   否则新 DOM 里只有服务端硬编码 is-active 的「工作记录」面板亮着——点分类卡片后
+   ?cat=xxx 明明加载成功，视图却被切回工作记录，表现为「点了没反应/状态乱跳」。
+   fallback = 刷新前面板名：URL 无 cat/wfq/hash 时停留原面板（如清除筛选后仍留在文件页）。 */
+window.__officeInitPanels = function (fallback) {
   var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-office-tab]'));
   var panels = Array.prototype.slice.call(document.querySelectorAll('[data-office-panel]'));
   function activate(name, updateHash) {
@@ -701,19 +706,21 @@
   if (fromHash === 'ai-advise') initial = 'advise';
   if (fromHash === 'report-form') initial = 'reports';
   if (fromHash === 'workfiles' || fromHash === 'work-cats') initial = 'files';
-  activate(initial || 'records', false);
+  activate(initial || fallback || 'records', false);
   document.querySelectorAll('.os-jump').forEach(function (link) {
     link.addEventListener('click', function () {
       var target = (link.getAttribute('href') || '').replace('#', '');
       activate(target === 'ai-advise' ? 'advise' : target === 'report-form' ? 'reports' : 'files', false);
     });
   });
-})();
+};
+window.__officeInitPanels();
 
 /* 工作记录内联编辑。抽成具名函数，便于筛选局部刷新后重新绑定新 DOM。 */
 window.__officeInitRecords = function () {
   var STATUS_OPTS = [{% for s in status_opts %}'{{ s }}',{% endfor %}];
-  var CATS = [{% for k,l in cats.items %}['{{ k }}', '{{ l }}'],{% endfor %}];
+  var CATS = [{% for k,l in work_cats.items %}['{{ k }}', '{{ l }}'],{% endfor %}];
+  var ARCHIVE_KEY = '{{ archive_key }}', ARCHIVE_LABEL = '{{ archive_label }}';
   function statusClass(v) {
     if (!v) return 'wr-status wr-status-empty';
     if (v === '已完成') return 'wr-status-success';
@@ -745,7 +752,13 @@ window.__officeInitRecords = function () {
     if (field === 'category') {
       editor = document.createElement('select');
       editor.className = 'wr-edit-input form-select form-select-sm d-inline-block w-auto';
-      CATS.forEach(function (p) {
+      // 归档分类不作为可选项（归档只能走日期卡片的「归档」按钮）；
+      // 但归档记录（归档视图里）被内联编辑时，原值不在候选里会误触发改写 → 追加原值为选中项保底
+      var catOpts = CATS.slice();
+      if (old && !catOpts.some(function (p) { return p[0] === old; })) {
+        catOpts.push([old, old === ARCHIVE_KEY ? ARCHIVE_LABEL : old]);
+      }
+      catOpts.forEach(function (p) {
         var o = document.createElement('option');
         o.value = p[0]; o.textContent = p[1];
         if (p[0] === old) o.selected = true;
@@ -859,7 +872,8 @@ window.__officeInitRecords = function () {
       e.stopPropagation();
       var day = this.dataset.day, n = this.dataset.count || '';
       if (!confirm('把 ' + day + ' 的 ' + n + ' 条记录归档到「{{ archive_label }}」分类？\n'
-        + '归档后不再显示在本列表中，可点「工作记录」标题旁的「归档的工作记录」按钮查看。')) return;
+        + '仅当该日全部记录均为「已完成」时可归档；归档后不再显示在本列表中，\n'
+        + '可点「工作记录」标题旁的「归档的工作记录」按钮查看。')) return;
       var self = this;
       self.disabled = true;
       fetch('/office/api/archive_day/', {
@@ -869,7 +883,17 @@ window.__officeInitRecords = function () {
       })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (!d.ok) { alert('归档失败：' + (d.error || '未知错误')); self.disabled = false; return; }
+          if (!d.ok) {
+            // 归档门槛：后端校验该日存在未完成记录时回传 has_incomplete + 明细，前端明确提示
+            var msg = (d.error === 'has_incomplete')
+              ? '「' + day + '」还有 ' + d.incomplete + ' 条记录未完成，已阻止归档。\n'
+                + '须该日全部记录均为「已完成」才能归档。'
+                + (d.samples && d.samples.length ? '\n未完成例如：' + d.samples.join('；') : '')
+              : '归档失败：' + (d.error || '未知错误');
+            alert(msg);
+            self.disabled = false;
+            return;
+          }
           // 归档后整块局部刷新（与筛选同一套流程）；异常时退回整页刷新
           if (window.__officeReload) { window.__officeReload(); } else { location.reload(); }
         })
@@ -976,8 +1000,11 @@ window.__officeInitSearch();
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var fresh = doc.getElementById('office-scope');
     if (!fresh) { window.location.href = url; return; }
+    var curPanelEl = scope.querySelector('[data-office-panel].is-active');
+    var curPanel = curPanelEl ? curPanelEl.dataset.officePanel : '';
     scope.innerHTML = fresh.innerHTML;          // 整块替换，避免页内多处状态不同步
     if (push) window.history.pushState({ officeScope: 1 }, '', url);
+    if (window.__officeInitPanels) window.__officeInitPanels(curPanel);  // 重绑面板/标签：分类卡片刷新后停留在「工作文件」面板
     if (window.__officeInitRecords) window.__officeInitRecords();  // 重新绑定记录交互
     if (window.__officeInitReport) window.__officeInitReport();    // 重新绑定报告区（快捷区间 / 名称预览）
     if (window.__officeInitSearch) window.__officeInitSearch();    // 重新绑定统一搜索（范围切换即搜）

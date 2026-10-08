@@ -335,6 +335,9 @@ def index(request):
                         'hint': KIND_HINTS.get(k, '')}
                        for k, lbl in KIND_LABELS.items()],
         'cats': CATEGORY_LABELS, 'kinds': KIND_LABELS,
+        # 工作记录专用分类集（不含归档分类）：新建表单与内联编辑的候选项；
+        # 归档只能由日期卡片「归档」按钮触发，故不进入任何手动选项。
+        'work_cats': WORK_CATS, 'archive_key': ARCHIVE_CAT,
         'status_opts': STATUS_OPTIONS,
         'cat_cards': cat_cards,
         'active_cat': cat,
@@ -381,7 +384,9 @@ def work_add(request):
     if request.method != 'POST':
         return redirect('/office/')
     new_cat = (request.POST.get('category') or '').strip()
-    if new_cat not in CATEGORY_LABELS:      # 白名单：避免伪造/失效分类写入
+    # 白名单只收三个工作分类：归档分类不可经新建写入——新增记录一律默认未归档，
+    # 归档只能由日期卡片上的「归档」按钮（api_archive_day）触发。
+    if new_cat not in WORK_CATS:
         new_cat = 'admin'
     WorkRecord.objects.create(
         category=new_cat,
@@ -706,7 +711,9 @@ def api_record_update(request):
     field = data.get('field')
     value = (data.get('value') or '').strip()
     if field == 'category':
-        if value not in CATEGORY_LABELS:
+        # 归档分类不可经内联编辑写入（归档只能走日期卡片的「归档」按钮）；
+        # value 与现值相同的 no-op（如归档记录编辑其他字段时原值回写）放行。
+        if value != rec.category and value not in WORK_CATS:
             return JsonResponse({'ok': False, 'error': 'bad_category'})
         rec.category = value
     elif field == 'status':
@@ -768,6 +775,17 @@ def api_archive_day(request):
         return JsonResponse({'ok': False, 'error': 'bad_date'})
 
     qs = WorkRecord.objects.filter(date=day).exclude(category=ARCHIVE_CAT)
+    # 归档门槛：该日全部记录状态均为「已完成」才放行；否则阻断并回传明细供前端提示。
+    # 状态为空视为未完成（三态之外的自定义/未设置状态不允许静默归档）。
+    incomplete = qs.exclude(status='已完成')
+    if incomplete.exists():
+        return JsonResponse({
+            'ok': False,
+            'error': 'has_incomplete',
+            'incomplete': incomplete.count(),
+            'samples': ['%s（%s）' % (r.content[:20], r.status or '未设置')
+                        for r in incomplete.order_by('pk')[:3]],
+        })
     moved = qs.update(category=ARCHIVE_CAT)
     if moved:
         log_operation('office', 'archive_day', detail='%s x%d' % (day, moved))
