@@ -41,6 +41,8 @@ $managePath = Join-Path $projectRoot 'manage.py'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $pythonPath -X utf8 $managePath migrate --check
 if ($LASTEXITCODE -ne 0) { throw 'Database migrations are pending. Back up the instance, then run manage.py migrate.' }
+& $pythonPath -X utf8 $managePath verify_reader_assets
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $pythonPath -X utf8 $managePath collectstatic --noinput
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $runtimePath = Join-Path $projectRoot '.runtime'

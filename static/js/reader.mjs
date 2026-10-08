@@ -666,5 +666,6 @@ try {
   if (!config.available) throw new Error("原件暂不可用，请核对文件目录。");
   await (isPdf ? openPdf() : openText());
 } catch (error) {
-  fail(error.message || "无法打开文档，请下载原件核对。");
+  const message = /[\u4e00-\u9fff]/.test(error.message || "") ? error.message : "文档暂时未能打开，请重新打开或下载原件核对。";
+  fail(message);
 }

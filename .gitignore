@@ -65,6 +65,10 @@ dist/
 .coverage
 htmlcov/
 
+# Runtime PDF renderer modules are distributed assets, not build intermediates.
+!static/vendor/pdfjs-*/build/
+!static/vendor/pdfjs-*/build/*.mjs
+
 # ---------- 7. 编辑器 / 操作系统 ----------
 .vscode/
 .idea/
