@@ -7,6 +7,11 @@ import os
 import logging
 import shutil
 import subprocess
+import sys
+import json
+import time
+from django.conf import settings
+from uuid import uuid4
 from pathlib import Path
 
 logger = logging.getLogger('kb')
@@ -14,7 +19,7 @@ logger = logging.getLogger('kb')
 FFMPEG_BIN = (
     os.environ.get('FFMPEG_BIN')
     or shutil.which('ffmpeg')
-    or r'C:\ZSK\XiTong\bin\ffmpeg.exe'
+    or str(settings.BASE_DIR / 'bin' / 'ffmpeg.exe')
 )
 
 TESSERACT_BIN = (
@@ -58,22 +63,30 @@ def extract_keyframes(video_path, out_dir, max_frames=6):
     pattern = out_dir / 'frame_%03d.jpg'
     interval = max(1, int(max_frames))
     subprocess.run(
-        [FFMPEG_BIN, '-y', '-i', str(video_path), '-vf', f'fps=1/{interval}', str(pattern)],
-        check=True, capture_output=True,
+        [FFMPEG_BIN, '-y', '-i', str(video_path), '-vf', f'fps=1/{interval}', '-frames:v', str(max(1, min(60, int(max_frames)))), '-t', '900', str(pattern)],
+        check=True, capture_output=True, timeout=120,
     )
     return sorted(out_dir.glob('*.jpg'))
 
 
-def video_to_markdown(url, work_root):
+def video_to_markdown(url, work_root, heartbeat=lambda *_: None):
     """视频转图文主流程。返回 (title, markdown)。"""
     _ensure_ffmpeg()
     import yt_dlp
-    work = Path(work_root)
+    work = Path(work_root) / uuid4().hex
     work.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+    def download_progress(info):
+        heartbeat()
+        if info.get('downloaded_bytes', 0) > 128 * 1024**2 or time.monotonic()-started > 180:
+            raise RuntimeError('视频下载超过 128 MB 或三分钟资源上限')
 
     with yt_dlp.YoutubeDL(
-        {'outtmpl': str(work / '%(id)s.%(ext)s'), 'format': 'best', 'quiet': True}
+        {'outtmpl': str(work / '%(id)s.%(ext)s'), 'format': 'best', 'quiet': True, 'noplaylist': True, 'socket_timeout': 10, 'retries': 1, 'max_filesize': 128 * 1024**2, 'progress_hooks': [download_progress]}
     ) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if not info or info.get('duration', 901) > 900 or info.get('is_live'):
+            raise ValueError('视频超过 15 分钟上限、直播或无法确定时长')
         info = ydl.extract_info(url, download=True)
         title = info.get('title') or '视频'
         vid = info.get('id')
@@ -89,36 +102,32 @@ def video_to_markdown(url, work_root):
             video_file = cands[0] if cands else None
     if not video_file:
         raise RuntimeError('未能定位下载的视频文件')
+    if video_file.stat().st_size > 128 * 1024**2:
+        raise RuntimeError('下载的视频超过 128 MB 上限，未继续解析')
+    heartbeat()
 
     audio = work / 'audio.wav'
     subprocess.run(
         [FFMPEG_BIN, '-y', '-i', str(video_file), '-vn', '-acodec', 'pcm_s16le', str(audio)],
-        check=True, capture_output=True,
+        check=True, capture_output=True, timeout=120,
     )
 
-    transcript = ''
-    if have_whisper():
-        try:
-            import whisper
-            model = whisper.load_model('base')
-            transcript = model.transcribe(str(audio))['text']
-        except Exception as e:
-            logger.error('whisper failed: %s', e)
-            transcript = f'[whisper 转写失败：{e}]'
-    else:
-        transcript = '[whisper 未安装，跳过语音转写；已提取音频与关键帧]'
-
-    frames = []
-    try:
-        frames = extract_keyframes(video_file, work / 'frames')
-    except Exception as e:
-        logger.error('keyframes failed: %s', e)
-
+    if not have_whisper():
+        raise RuntimeError('缺少 Whisper，原视频/音频已保留；安装可选能力后重试')
+    heartbeat()
+    result = subprocess.run([sys.executable, '-m', 'core.transcribe', str(audio)],
+                            check=True, capture_output=True, text=True, encoding='utf-8', timeout=240)
+    transcript = json.loads(result.stdout)['text']
+    if not transcript.strip():
+        raise RuntimeError('未获得有效转写，原视频已保留')
+    frames = extract_keyframes(video_file, work / 'frames')
+    heartbeat()
+    from core.storage import media_url
     lines = [
         f'# {title}', '', f'> 来源：{url}', '',
         '## 语音 / 字幕转写', transcript or '（无）', '', '## 重点截图',
     ]
-    lines += [f'![]({f.name})' for f in frames] or ['（无截图）']
+    lines += [f'![]({media_url(f)})' for f in frames] or ['（无截图）']
     return title, '\n'.join(lines)
 
 
@@ -131,10 +140,10 @@ def ocr_image(image_path):
         from PIL import Image
         pytesseract.pytesseract.tesseract_cmd = TESSERACT_BIN
         try:
-            return pytesseract.image_to_string(Image.open(image_path), lang='chi_sim+eng')
+            return pytesseract.image_to_string(Image.open(image_path), lang='chi_sim+eng', timeout=60)
         except Exception:
             # 中文包缺失时退化为仅英文识别，保证基础可用
-            return pytesseract.image_to_string(Image.open(image_path), lang='eng')
+            return pytesseract.image_to_string(Image.open(image_path), lang='eng', timeout=60)
     except Exception as e:
         logger.error('ocr failed: %s', e)
         return ''

@@ -5,7 +5,6 @@
 import json
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Inspiration, NoteLog
 from core.services import log_operation
@@ -31,7 +30,6 @@ def index(request):
     return render(request, 'inspiration.html', {'items': items})
 
 
-@csrf_exempt
 def api_add(request):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'})
@@ -74,7 +72,6 @@ def notes_page(request):
     return render(request, 'notes.html', {'logs': logs})
 
 
-@csrf_exempt
 def api_log(request):
     """随笔记记入历史落库：成功写入某库后由前端回调记录。"""
     if request.method != 'POST':

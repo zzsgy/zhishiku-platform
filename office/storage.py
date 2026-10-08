@@ -19,6 +19,9 @@ from datetime import date
 from pathlib import Path
 
 from core.services import ensure_dir, sanitize_filename, zhi_shi_path
+from core.storage import atomic_write, bounded_path, inside
+from django.conf import settings
+from uuid import uuid4
 
 logger = logging.getLogger('kb')
 
@@ -54,9 +57,9 @@ def _write(dirpath, filename, content):
     """写文本文件并返回绝对路径；失败返回空串（仅记日志，不影响主流程）。"""
     try:
         ensure_dir(dirpath)
-        path = Path(dirpath) / filename
-        path.write_text(content or '', encoding='utf-8')
-        return str(path)
+        path = Path(dirpath) / (uuid4().hex + '_' + filename)
+        atomic_write(path, content or '')
+        return path.relative_to(Path(settings.ZHI_SHI_ROOT).resolve()).as_posix()
     except Exception as e:  # pragma: no cover - 权限/占用等环境问题
         logger.error('办公平台产出落盘失败 %s / %s: %s', dirpath, filename, e)
         return ''
@@ -111,6 +114,9 @@ def display_path(path):
 
 def file_exists(path):
     try:
-        return bool(path) and os.path.isfile(path)
+        p = Path(path)
+        if p.is_absolute():
+            return inside(p, settings.ZHI_SHI_ROOT) and p.is_file()
+        return bounded_path(settings.ZHI_SHI_ROOT, p).is_file()
     except Exception:
         return False

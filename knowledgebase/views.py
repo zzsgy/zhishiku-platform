@@ -6,9 +6,9 @@
 import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count
+from core.pagination import paginate
 
 from core.models import KnowledgeBase, KnowledgeNode, LinkItem, NodeNote
 from bookshelf.models import GoldenSentence
@@ -28,21 +28,20 @@ def index(request):
     if q:
         nodes = nodes.filter(Q(title__icontains=q) | Q(content_md__icontains=q))
 
-    stats = {b.pk: KnowledgeNode.objects.filter(base=b, status='adopted').count() for b in bases}
-    kind_stats = {}
-    for b in bases:
-        kind_stats[b.pk] = {
-            'wiki': KnowledgeNode.objects.filter(base=b, node_type='wiki', status='adopted').count(),
-            'article': KnowledgeNode.objects.filter(base=b, node_type='article', status='adopted').count(),
-            'doc': KnowledgeNode.objects.filter(base=b, node_type='doc', status='adopted').count(),
-            'note': KnowledgeNode.objects.filter(base=b, node_type='note', status='adopted').count(),
-        }
+    aggregate = list(KnowledgeNode.objects.filter(status='adopted').order_by().values('base_id', 'node_type').annotate(n=Count('id')))
+    stats = {base.pk: 0 for base in bases}
+    kind_stats = {base.pk: {kind: 0 for kind in ('wiki', 'article', 'doc', 'note')} for base in bases}
+    for row in aggregate:
+        if row['base_id'] in stats:
+            stats[row['base_id']] += row['n']
+            kind_stats[row['base_id']][row['node_type']] = row['n']
+    page = paginate(request, nodes.select_related('base').order_by('-updated', '-pk'))
     golden_count = GoldenSentence.objects.count()
     link_pending = LinkItem.objects.filter(status='pending').count()
     link_total = LinkItem.objects.count()
     inspiration_count = Inspiration.objects.count()
     return render(request, 'knowledgebase.html', {
-        'bases': bases, 'base': base, 'nodes': nodes[:80],
+        'bases': bases, 'base': base, 'nodes': page, 'page_obj': page,
         'stats': stats, 'kind_stats': kind_stats, 'q': q,
         'golden_count': golden_count,
         'link_pending': link_pending, 'link_total': link_total,
@@ -81,7 +80,6 @@ def add_note(request, pk):
     return redirect(f'/knowledgebase/node/{pk}/')
 
 
-@csrf_exempt
 def api_note(request):
     """划词「记笔记」JSON 接口：把选中内容快速写入当前知识节点的阅读笔记。"""
     if request.method != 'POST':
@@ -102,7 +100,6 @@ def api_note(request):
     return JsonResponse({'ok': True, 'id': obj.pk})
 
 
-@csrf_exempt
 def api_note_delete(request):
     """删除知识节点阅读笔记（阅读面板手动移除）。"""
     if request.method != 'POST':
@@ -171,8 +168,9 @@ def link_library(request):
     total = LinkItem.objects.count()
     domains = list(LinkItem.objects.values_list('domain', flat=True).distinct()[:30])
 
+    page = paginate(request, qs.order_by('-created', '-pk'), 50)
     return render(request, 'kb_links.html', {
-        'items': qs[:200],
+        'items': page, 'page_obj': page,
         'pending': pending, 'archived': archived, 'invalid': invalid, 'total': total,
         'domains': domains,
         'source_choices': LinkItem.SOURCE_CHOICES,
@@ -183,7 +181,6 @@ def link_library(request):
     })
 
 
-@csrf_exempt
 def link_status(request, pk):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'})
@@ -199,7 +196,6 @@ def link_status(request, pk):
     return JsonResponse({'ok': True, 'status': item.status})
 
 
-@csrf_exempt
 def link_delete(request, pk):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'})
@@ -209,7 +205,6 @@ def link_delete(request, pk):
     return JsonResponse({'ok': True})
 
 
-@csrf_exempt
 def link_retry(request, pk):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'})
@@ -244,7 +239,8 @@ def node_delete(request, pk):
     node = get_object_or_404(KnowledgeNode, pk=pk)
     base_pk = node.base.pk if node.base else None
     title = node.title
-    node.delete()  # 级联删除 notes 与 edges
+    from core.services import recycle_node
+    recycle_node(node)  # 级联删除 notes 与 edges
     log_operation('knowledgebase', 'node_delete', detail=title)
     if base_pk:
         return redirect(f'/knowledgebase/?base={base_pk}')

@@ -4,7 +4,11 @@
   C:/ZSK/ZhiShi/03_知识库/...   原始资料与生成内容
 """
 import re
+import json
 import logging
+from html import escape, unescape
+from django.db import transaction
+from .storage import bounded_path, atomic_write
 from pathlib import Path
 
 from django.conf import settings
@@ -20,6 +24,9 @@ logger = logging.getLogger('kb')
 def log_operation(module, action, detail='', user='系统'):
     """记录一次工作台操作。失败不影响主流程。"""
     try:
+        if user == '系统':
+            from .middleware import actor
+            user = actor.get()
         OperationLog.objects.create(module=module, action=action, detail=detail, user=user)
     except Exception as e:  # pragma: no cover
         logger.error('log_operation failed: %s', e)
@@ -29,7 +36,7 @@ def log_operation(module, action, detail='', user='系统'):
 # 目录映射（与 settings.ZHI_SHI_DIRS 对应）
 # ---------------------------------------------------------------------------
 def zhi_shi_path(*parts):
-    return Path(settings.ZHI_SHI_ROOT, *parts)
+    return bounded_path(settings.ZHI_SHI_ROOT, Path(*parts))
 
 
 def ensure_dir(path):
@@ -48,7 +55,7 @@ def default_base(kind='knowledge'):
 _WIKILINK_RE = re.compile(r'\[\[([^\]]+?)(?:\|([^\]]+?))?\]\]')
 
 
-def render_markdown(text):
+def render_markdown(text, base_id=None):
     """把 Markdown 渲染为 HTML，并把 [[标题|显示]] 转为站内双链。"""
     if not text:
         return ''
@@ -60,10 +67,19 @@ def render_markdown(text):
             from markdown import markdown as md
             html = md(text)
         except Exception:
-            html = f'<pre>{text}</pre>'
-    html = _apply_wikilinks_outside_code(html)
+            html = f'<pre>{escape(text)}</pre>'
+    html = _apply_wikilinks_outside_code(html, base_id)
     html = wrap_tables(html)
-    return html
+    import nh3
+    return nh3.clean(html,
+        tags={'p','br','hr','h1','h2','h3','h4','h5','h6','blockquote','pre','code',
+              'ul','ol','li','strong','em','del','s','a','img','table','thead','tbody',
+              'tfoot','tr','th','td','div','span','sup','sub','dl','dt','dd'},
+        attributes={'a': {'href','title','class'}, 'img': {'src','alt','title'},
+                    'pre': {'class'}, 'code': {'class'}, 'div': {'class'}, 'span': {'class'},
+                    'th': {'align','colspan','rowspan'}, 'td': {'align','colspan','rowspan'},
+                    'ol': {'start'}, '*': {'id'}},
+        url_schemes={'http','https','mailto'}, link_rel='noopener noreferrer')
 
 
 _TABLE_RE = re.compile(r'(<table[\s\S]*?</table>)', re.IGNORECASE)
@@ -82,26 +98,29 @@ def wrap_tables(html):
     return _TABLE_RE.sub(r'<div class="kb-table-wrap">\1</div>', html)
 
 
-def _apply_wikilinks_outside_code(html):
+def _apply_wikilinks_outside_code(html, base_id=None):
     """仅在非代码块（<pre>/<code>）之外替换 [[双链]]，避免把代码里的 [[...]] 误链接化。"""
     parts = re.split(r'(<pre[\s\S]*?</pre>|<code[\s\S]*?</code>)', html)
     for i in range(0, len(parts), 2):  # 偶数下标为非代码块文本
-        parts[i] = _WIKILINK_RE.sub(_wikilink_repl, parts[i])
+        parts[i] = _WIKILINK_RE.sub(lambda match: _wikilink_repl(match, base_id), parts[i])
     return ''.join(parts)
 
 
-def _wikilink_repl(m):
+def _wikilink_repl(m, base_id=None):
     """[[标题]] / [[标题|别名]] → 站内双链。
 
     只输出链接文字，不再把 [[ ]] 画出来：方括号是「书写语法」，只属于 Markdown 源码；
     阅读页与编辑页都应呈现成普通链接（蓝色 + 虚线下划线 + 悬停提示目标页）。
     这样编辑器才能做到「编辑态不暴露语法符号」，且与阅读页完全一致。
     """
-    title = m.group(1).strip()
-    label = (m.group(2) or title).strip()
+    title = unescape(m.group(1)).strip()
+    label = unescape(m.group(2) or title).strip()
     from urllib.parse import quote
-    return (f'<a class="kb-wikilink" href="/wiki/?title={quote(title)}" '
-            f'title="打开知识页：{title}">{label}</a>')
+    href = f'/wiki/node/{int(title[3:])}/' if title.startswith('id:') and title[3:].isdigit() else f'/wiki/?title={quote(title)}'
+    if base_id and not title.startswith('id:'):
+        href += '&amp;base=' + str(int(base_id))
+    return (f'<a class="kb-wikilink" href="{href}" '
+            f'title="打开知识页：{escape(title, quote=True)}">{escape(label)}</a>')
 
 
 def extract_wikilinks(text):
@@ -115,7 +134,7 @@ def extract_wikilinks(text):
 
 
 # ---------------------------------------------------------------------------
-# 知识节点 <-> Markdown 文件 双向同步
+# 数据库为内容权威，Markdown 是可重建导出
 # ---------------------------------------------------------------------------
 def sanitize_filename(name, maxlen=80):
     name = (name or 'untitled').strip()
@@ -159,19 +178,17 @@ CATEGORY_FOLDER.update(ARCHIVE_CATEGORY_FOLDER)
 def node_markdown_path(node):
     if not node.base or not node.base.directory:
         return None
-    base_dir = zhi_shi_path(node.base.directory)
-    folder = CATEGORY_FOLDER.get(node.category)
-    if folder:
-        base_dir = base_dir / folder
-    ensure_dir(base_dir)
-    return base_dir / f'{sanitize_filename(node.title)}.md'
+    if node.export_path:
+        return zhi_shi_path(node.export_path)
+    base_dir = zhi_shi_path(node.base.directory, '_nodes')
+    return base_dir / f'node-{node.pk}.md'
 
 
 def sync_node_to_file(node):
-    path = node_markdown_path(node)
-    if not path:
-        return None
     try:
+        path = node_markdown_path(node)
+        if not path:
+            raise ValueError('未配置知识库导出目录，正文已在数据库保存')
         content = f'# {node.title}\n\n> 类型：{node.get_node_type_display()}  '
         if node.category:
             content += f'分类：{node.category}  '
@@ -180,21 +197,33 @@ def sync_node_to_file(node):
         if node.source:
             content += f'\n> 来源：{node.source}'
         content += f'\n\n{node.content_md or ""}'
-        path.write_text(content, encoding='utf-8')
+        atomic_write(path, content)
+        relative = path.relative_to(Path(settings.ZHI_SHI_ROOT).resolve()).as_posix()
+        KnowledgeNode.objects.filter(pk=node.pk).update(export_path=relative, export_status='done', export_error='')
+        node.export_path, node.export_status, node.export_error = relative, 'done', ''
         return str(path)
     except Exception as e:
         logger.error('sync_node_to_file failed: %s', e)
+        KnowledgeNode.objects.filter(pk=node.pk).update(export_status='failed', export_error=str(e)[:500])
+        node.export_status, node.export_error = 'failed', str(e)[:500]
         return None
 
 
 def auto_link_edges(node):
     """根据正文里的 [[标题]] 自动建立关系边，并清理旧的 out 链接。"""
     from .models import Edge
-    Edge.objects.filter(source=node, kind='link').delete()
-    for t in extract_wikilinks(node.content_md):
-        target = KnowledgeNode.objects.filter(title__iexact=t).exclude(pk=node.pk).first()
-        if target:
-            Edge.objects.get_or_create(source=node, target=target, kind='link')
+    with transaction.atomic():
+        targets = []
+        for title in extract_wikilinks(node.content_md):
+            query = KnowledgeNode.objects.filter(base_id=node.base_id, status='adopted').exclude(pk=node.pk)
+            if title.startswith('id:') and title[3:].isdigit():
+                matches = list(query.filter(pk=int(title[3:]))[:2])
+            else:
+                matches = list(query.filter(title__iexact=title)[:2])
+            if len(matches) == 1:
+                targets.append(matches[0])
+        Edge.objects.filter(source=node, kind='link').delete()
+        Edge.objects.bulk_create([Edge(source=node, target=t, kind='link') for t in targets], ignore_conflicts=True)
 
 
 def link_collection_to_node(item: CollectionItem, base=None, title=None, category=''):
@@ -205,7 +234,8 @@ def link_collection_to_node(item: CollectionItem, base=None, title=None, categor
     产物做二次加工产出 Wiki 层知识，不作为上传入库的必经环节。
     """
     base = base or default_base('knowledge')
-    node = KnowledgeNode.objects.create(
+    with transaction.atomic():
+        node, _ = KnowledgeNode.objects.get_or_create(collection=item, defaults=dict(
         base=base,
         title=title or item.title or f'收集-{item.pk}',
         content_md=item.parsed_md or item.raw_text,
@@ -213,10 +243,54 @@ def link_collection_to_node(item: CollectionItem, base=None, title=None, categor
         category=category or item.kind,
         source=item.source_url or '本地收集',
         status='adopted',
-    )
+        asset=item.asset,
+        ))
+        auto_link_edges(node)
     sync_node_to_file(node)
     # 收集导入的网页/OCR 文档常含 [[双链]]，落库后即时建边，纳入星图与反向链接
-    auto_link_edges(node)
+    return node
+
+
+def recycle_node(node):
+    """Preserve the complete record and revision history before deletion."""
+    from django.core import serializers
+    from .models import DeletedNode, Edge
+    from django.db.models import Q
+    with transaction.atomic():
+        related = [node, *node.notes.all(), *node.revisions.all(),
+                   *node.nodeproposal_set.all(), *node.goldens.all(),
+                   *Edge.objects.filter(Q(source=node) | Q(target=node))]
+        snapshot = json.loads(serializers.serialize('json', related))
+        deleted = DeletedNode.objects.create(original_id=node.pk, snapshot={'objects': snapshot,
+            'children': list(KnowledgeNode.objects.filter(parent=node).values_list('pk', flat=True))})
+        if node.export_path:
+            path = zhi_shi_path(node.export_path)
+            if path.exists():
+                recycled = zhi_shi_path('05_归档库', 'recycle', f'node-{node.pk}-deleted-{deleted.pk}.md')
+                recycled.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(recycled, path.read_bytes())
+                transaction.on_commit(lambda: path.unlink(missing_ok=True))
+        node.delete()
+
+
+def restore_node(deleted):
+    from django.core import serializers
+    from django.core.exceptions import ValidationError
+    with transaction.atomic():
+        objects = list(serializers.deserialize('json', json.dumps(deleted.snapshot['objects'])))
+        for obj in objects:
+            if type(obj.object).objects.filter(pk=obj.object.pk).exists():
+                raise ValidationError('恢复对象编号已存在，拒绝覆盖；请核对回收记录')
+        for obj in objects:
+            if obj.object._meta.label_lower == 'core.edge':
+                if not (KnowledgeNode.objects.filter(pk=obj.object.source_id).exists()
+                        and KnowledgeNode.objects.filter(pk=obj.object.target_id).exists()):
+                    raise ValidationError('关系另一端已删除，请先恢复关联节点')
+            obj.save()
+        node = KnowledgeNode.objects.get(pk=deleted.original_id)
+        KnowledgeNode.objects.filter(pk__in=deleted.snapshot.get('children', []), parent__isnull=True).update(parent=node)
+        deleted.delete()
+    sync_node_to_file(node)
     return node
 
 

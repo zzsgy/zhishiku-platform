@@ -1,6 +1,8 @@
 """总览看板：数据概览 + 趋势图 + 近期动态 + 各模块快捷入口。"""
 import json
 from datetime import timedelta
+from django.db.models import Count
+from django.db.models.functions import TruncDate
 
 from django.shortcuts import render
 from django.utils import timezone
@@ -13,7 +15,7 @@ from bookshelf.models import Book, GoldenSentence
 def index(request):
     now = timezone.now()
     base_count = KnowledgeBase.objects.count()
-    node_count = KnowledgeNode.objects.count()
+    node_count = KnowledgeNode.objects.filter(status='adopted').count()
     collection_count = CollectionItem.objects.count()
     log_count = OperationLog.objects.count()
     insp_count = Inspiration.objects.count()
@@ -21,16 +23,15 @@ def index(request):
     golden_count = GoldenSentence.objects.count()
     edge_count = Edge.objects.count()
 
-    # 最近 7 天趋势
-    days, log_trend, node_trend = [], [], []
-    for i in range(6, -1, -1):
-        d = (now - timedelta(days=i)).date()
-        days.append(d.strftime('%m-%d'))
-        log_trend.append(OperationLog.objects.filter(created__date=d).count())
-        node_trend.append(KnowledgeNode.objects.filter(created__date=d).count())
-
+    first_day = timezone.localdate(now) - timedelta(days=6)
+    log_counts = {row['day']: row['n'] for row in OperationLog.objects.filter(created__date__gte=first_day).order_by().annotate(day=TruncDate('created')).values('day').annotate(n=Count('id'))}
+    node_counts = {row['day']: row['n'] for row in KnowledgeNode.objects.filter(status='adopted', created__date__gte=first_day).order_by().annotate(day=TruncDate('created')).values('day').annotate(n=Count('id'))}
+    dates = [first_day + timedelta(days=i) for i in range(7)]
+    days = [day.strftime('%m-%d') for day in dates]
+    log_trend = [log_counts.get(day, 0) for day in dates]
+    node_trend = [node_counts.get(day, 0) for day in dates]
     recent_logs = OperationLog.objects.all()[:12]
-    recent_nodes = KnowledgeNode.objects.all()[:8]
+    recent_nodes = KnowledgeNode.objects.filter(status='adopted')[:8]
 
     return render(request, 'dashboard.html', {
         'base_count': base_count, 'node_count': node_count,

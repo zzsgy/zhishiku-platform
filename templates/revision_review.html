@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<h1>核对 AI 候选修订</h1><p>{{ node.title }} · 基于版本 {{ proposal.base_version }}</p>
+<p>分类：{{ node.category }} → {{ proposal.proposed.category }}；标签：{{ node.tags }} → {{ proposal.proposed.tags }}</p>
+<pre style="white-space:pre-wrap">{{ diff }}</pre>
+{% if proposal.status == 'pending' %}<form method="post">{% csrf_token %}
+<button name="action" value="accept" class="btn btn-primary">采纳修订</button>
+<button name="action" value="reject" class="btn btn-outline-secondary">拒绝修订</button></form>{% else %}<p>此修订已处理。</p>{% endif %}
+{% endblock %}

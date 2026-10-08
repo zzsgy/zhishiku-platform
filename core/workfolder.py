@@ -43,7 +43,7 @@ def _ext_of(fn):
     return os.path.splitext(fn)[1].lstrip('.').lower()
 
 
-def index_uploaded_file(original_saved_path, title=None, category='未分类', extracted=''):
+def index_uploaded_file(original_saved_path, title=None, category='未分类', extracted='', asset=None):
     """登记一个已保存到平台的文件到索引表（按路径 upsert，不产生重复记录）。"""
     path = str(original_saved_path)
     ext = _ext_of(os.path.basename(path))
@@ -53,7 +53,9 @@ def index_uploaded_file(original_saved_path, title=None, category='未分类', e
     except Exception:
         size, mtime = 0, 0
     fallback = os.path.splitext(os.path.basename(path))[0]
-    entry = WorkFileIndex.objects.filter(original_path=path).first()
+    if asset:
+        path = 'media:' + asset.storage_path
+    entry = WorkFileIndex.objects.filter(original_path=path, category=category).first()
     if entry:
         entry.title = title or fallback
         entry.category = category

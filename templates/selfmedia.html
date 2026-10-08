@@ -43,9 +43,9 @@
         <p class="small text-muted flex-grow-1">{{ n.content_md|truncatechars:120|default:'（暂无正文）' }}</p>
         <p class="small text-muted mb-2">更新于 {{ n.updated|date:'m-d H:i' }}</p>
         <div class="btn-group btn-group-sm" role="group">
-          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ n.pk }}"><i class="bi bi-pencil"></i> 编辑</button>
-          <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#polishModal" data-id="{{ n.pk }}" data-title="{{ n.title }}"><i class="bi bi-stars"></i> AI 润色</button>
-          <form method="post" action="/selfmedia/delete/{{ n.pk }}/" class="d-inline" onsubmit="return confirm('确认删除该草稿？此操作不可恢复。');">
+          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ n.pk }}" data-version="{{ n.version }}"><i class="bi bi-pencil"></i> 编辑</button>
+          <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#polishModal" data-id="{{ n.pk }}" data-version="{{ n.version }}" data-title="{{ n.title }}"><i class="bi bi-stars"></i> AI 润色</button>
+          <form method="post" action="/selfmedia/delete/{{ n.pk }}/" class="d-inline" onsubmit="return confirm('将该草稿移入知识回收站？');">
             {% csrf_token %}<button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
           </form>
         </div>
@@ -59,6 +59,7 @@
   {% endfor %}
 </div>
 
+{% include "_pagination.html" %}
 <!-- 编辑模态 -->
 <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
@@ -67,6 +68,7 @@
         {% csrf_token %}
         <div class="modal-header"><h5 class="modal-title">编辑草稿</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
+          <input type="hidden" name="version" id="editVersion">
           <input name="title" id="editTitle" class="form-control mb-2" placeholder="选题 / 标题">
           <textarea name="content_md" id="editContent" class="form-control" rows="12" style="font-family:monospace;" placeholder="文案正文（Markdown）"></textarea>
         </div>
@@ -106,6 +108,7 @@
   if (editModal) {
     editModal.addEventListener('show.bs.modal', function (e) {
       var id = e.relatedTarget.getAttribute('data-id');
+      document.getElementById('editVersion').value=e.relatedTarget.dataset.version;
       document.getElementById('editForm').action = '/selfmedia/edit/' + id + '/';
       document.getElementById('editTitle').value = (document.getElementById('nt-' + id) || {}).textContent || '';
       document.getElementById('editContent').value = (document.getElementById('nc-' + id) || {}).textContent || '';
@@ -114,10 +117,11 @@
 
   var polishModal = document.getElementById('polishModal');
   if (polishModal) {
-    var currentId = null;
+    var currentId = null, currentVersion = null;
     polishModal.addEventListener('show.bs.modal', function (e) {
       var btn = e.relatedTarget;
       currentId = btn.getAttribute('data-id');
+      currentVersion = btn.dataset.version;
       document.getElementById('polishTitle').textContent = btn.getAttribute('data-title') || '';
       document.getElementById('polishLoading').classList.remove('d-none');
       document.getElementById('polishResult').classList.add('d-none');
@@ -142,6 +146,7 @@
     document.getElementById('polishApply').addEventListener('click', function () {
       if (!currentId) return;
       var fd = new FormData();
+      fd.append('version', currentVersion);
       fd.append('title', document.getElementById('polishTitle').textContent);
       fd.append('content_md', document.getElementById('polishText').textContent);
       fetch('/selfmedia/edit/' + currentId + '/', { method: 'POST', body: fd, headers: { 'X-CSRFToken': getCookie('csrftoken') } })

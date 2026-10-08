@@ -187,6 +187,11 @@ def parse_ai_json(text, required_key='content_md'):
     except Exception:
         return None
     if isinstance(obj, dict) and (not required_key or required_key in obj):
+        for key, limit in {'title': 256, 'category': 64, 'tags': 256, 'content_md': 200000, 'definition': 10000}.items():
+            if key in obj and (not isinstance(obj[key], str) or len(obj[key]) > limit):
+                return None
+        if 'extra_links' in obj and (not isinstance(obj['extra_links'], list) or len(obj['extra_links']) > 30 or any(not isinstance(x, str) or len(x) > 256 for x in obj['extra_links'])):
+            return None
         if required_key == 'content_md':
             obj.setdefault('title', '提炼知识')
             obj.setdefault('category', '知识沉淀')
@@ -206,7 +211,8 @@ def _fallback_extract(sources):
     return {
         'title': '%s（提炼草稿）' % title,
         'category': '知识沉淀',
-        'tags': 'AI提炼',
+        'tags': '本地汇总',
+        '_local': True,
         'content_md': (
             '# %s\n\n> 来源：%s\n\n'
             '（AI 服务当前不可用，已生成本地降级草稿，请在 WiKI 层编辑完善，'
@@ -222,16 +228,23 @@ def extract_knowledge(sources, provider=None):
     if not sources:
         return None
     parts = []
+    warnings = []
+    budget = min(6000, 12000 // len(sources))
     for i, (t, r) in enumerate(sources, 1):
         title = get_source_title(t, r) or ('来源%d' % i)
         c = get_source_content(t, r) or '(无正文)'
-        parts.append('=== 来源 %d：%s ===\n%s' % (i, title, c[:6000]))
+        if len(c) > budget:
+            c = c[:budget // 2] + '\n[中间省略；本次仅处理头尾片段]\n' + c[-budget // 2:]
+            warnings.append('来源 %d 超出预算，仅处理头尾片段' % i)
+        parts.append('=== 来源 %d：%s，类型=%s，记录=%s ===\n%s' % (i, title, t, r, c))
     user = '\n\n'.join(parts)
     raw = ask_ai(_EXTRACT_SYSTEM, user, provider_id=provider, temperature=0.5)
     data = parse_ai_json(raw) if raw else None
     if not data:
         logger.warning('AI 提炼失败/不可用，启用本地降级草稿')
         return _fallback_extract(sources)
+    if warnings:
+        data['content_md'] += '\n\n> 输入范围：' + '；'.join(warnings)
     return data
 
 
@@ -250,14 +263,19 @@ _GROW_SYSTEM = (
 
 def grow_node(node, provider=None):
     """对单个节点调用 AI 自生长，返回 {category,tags,definition,extra_links} 或 None。"""
-    user = '知识标题：%s\n分类：%s\n标签：%s\n\n正文：\n%s' % (
-        node.title, node.category, node.tags, (node.content_md or '')[:5000])
+    content = node.content_md or ''
+    if len(content) > 5000:
+        content = content[:2500] + '\n[本次仅使用头尾片段，中间省略]\n' + content[-2500:]
+    candidates = list(KnowledgeNode.objects.filter(base_id=node.base_id, status='adopted').exclude(pk=node.pk).values_list('title', flat=True)[:100])
+    user = '知识标题：%s\n分类：%s\n标签：%s\n允许关联的实际标题：%s\n\n正文：\n%s' % (
+        node.title, node.category, node.tags, json.dumps(candidates, ensure_ascii=False), content)
     raw = ask_ai(_GROW_SYSTEM, user, provider_id=provider, temperature=0.4)
     # 自生长返回结构不含 content_md，解析时不强制该字段
     data = parse_ai_json(raw, required_key=None) if raw else None
     if not data:
         return None
     data.pop('content_md', None)  # 自生长不覆盖正文，只允许补齐
+    data['extra_links'] = [title for title in data.get('extra_links', []) if title in candidates]
     return data
 
 
@@ -301,7 +319,7 @@ def create_precip_node(sources, data, provider=None):
         origin_type=origin_type,
         origin_ref=origin_ref,
         origin_title=origin_title,
-        ai_generated=True,
+        ai_generated=not data.get('_local', False),
     )
     # 自生长第一步：把正文里的 [[双链]] 即时落成关系边（与正式节点一致）
     auto_link_edges(node)
@@ -322,5 +340,6 @@ def adopt_node(node):
 def discard_node(node):
     """丢弃：删除草稿及其关系边（不影响任何原始文档）。"""
     title = node.title
-    node.delete()  # 级联删除 edges / notes
+    from .services import recycle_node
+    recycle_node(node)
     log_operation('wiki', 'precip_discard', detail=title)

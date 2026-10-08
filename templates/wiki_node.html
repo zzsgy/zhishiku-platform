@@ -2,6 +2,11 @@
 {% load kb_extras %}
 {% block title %}{{ node.title }} - 知识库{% endblock %}
 {% block content %}
+{% if saved_md != None %}{{ saved_md|json_script:"confirmed-md" }}<script>
+try { var key='kbmd:{{ draft_namespace }}:{{ node.pk }}'; var draft=JSON.parse(localStorage.getItem(key)); var confirmed=JSON.parse(document.getElementById('confirmed-md').textContent); if(draft && draft.md.replace(/\r\n/g,'\n')===confirmed.replace(/\r\n/g,'\n'))localStorage.removeItem(key); } catch (e) {}
+</script>{% endif %}
+{% if node.export_status == 'failed' %}<p role="status" class="alert alert-warning">正文已入库，导出未完成。管理员可在诊断页重试。</p>{% endif %}
+{% if node.asset %}<p><a href="/media/{{ node.asset.storage_path }}">下载原件：{{ node.asset.original_name }}</a></p>{% endif %}
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
   <div>
     <h2 class="mb-0">{{ node.title }}</h2>
@@ -17,7 +22,7 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i> 采纳</button>
       </form>
-      <form method="post" action="/wiki/precipitation/discard/{{ node.pk }}/" onsubmit="return confirm('确定丢弃该提炼草稿？此操作不可撤销，且不影响原始文档。')" class="d-inline">
+      <form method="post" action="/wiki/precipitation/discard/{{ node.pk }}/" onsubmit="return confirm('确定丢弃该提炼草稿？可在回收站恢复，原件仍保留。')" class="d-inline">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i> 丢弃</button>
       </form>
@@ -25,8 +30,9 @@
     {% if node.node_type == 'wiki' %}
       <button type="button" class="btn btn-outline-info btn-sm" id="kbGrowBtn"><i class="bi bi-stars"></i> AI 自生长</button>
     {% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="/wiki/node/{{ node.pk }}/history/">修订历史</a>
     <a href="/wiki/node/{{ node.pk }}/edit/" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
-    <form method="post" action="/knowledgebase/node/{{ node.pk }}/delete/" onsubmit="return confirm('确定删除知识节点《{{ node.title }}》？将同时删除其阅读笔记与关联关系。')" class="d-inline">
+    <form method="post" action="/knowledgebase/node/{{ node.pk }}/delete/" onsubmit="return confirm('将此知识及其笔记、金句、关系移入回收站？')" class="d-inline">
       {% csrf_token %}
       <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> 删除</button>
     </form>
@@ -156,6 +162,7 @@
       fetch('/wiki/node/{{ node.pk }}/grow/', {
         method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'}
       }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok && d.review_url) { location.href = d.review_url; return; }
         if (d.ok) { alert('AI 自生长完成：' + (d.changed || []).join('、') + '。页面将刷新。'); location.reload(); }
         else { alert('自生长失败：' + (d.error || '未知错误')); btn.disabled = false; btn.textContent = 'AI 自生长'; }
       }).catch(function (e) { alert('请求失败：' + e); btn.disabled = false; btn.textContent = 'AI 自生长'; });

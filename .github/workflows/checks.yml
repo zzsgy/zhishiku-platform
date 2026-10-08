@@ -1,0 +1,23 @@
+name: Regression checks
+on: [push, pull_request]
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.11', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -X utf8 -m pip install --require-hashes -r requirements.lock
+      - run: python -X utf8 -m pip install -r requirements-test.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python -X utf8 manage.py check
+      - run: python -X utf8 manage.py makemigrations --check --dry-run
+      - run: python -X utf8 manage.py collectstatic --noinput
+      - run: python -X utf8 manage.py test --noinput
+      - run: python -X utf8 -m pip_audit -r requirements.lock --no-deps --disable-pip

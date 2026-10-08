@@ -20,6 +20,7 @@ MODULE_MAP = {
 
 
 def platform_context(request):
+    import hashlib
     path = request.path.strip('/').split('/')[0]
     active = MODULE_MAP.get(path, '')
     return {
@@ -28,4 +29,5 @@ def platform_context(request):
         'active_module': active,
         'zhi_shi_root': str(settings.ZHI_SHI_ROOT),
         'xi_tong_root': str(settings.BASE_DIR),
+        'draft_namespace': hashlib.sha256((settings.SECRET_KEY + ':' + str(request.user.pk)).encode()).hexdigest()[:20],
     }

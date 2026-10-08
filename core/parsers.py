@@ -25,7 +25,7 @@ IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp'}
 # ---------------------------------------------------------------------------
 # 本地文件解析
 # ---------------------------------------------------------------------------
-def parse_local_file(file_obj, orig_name, upload_url=''):
+def parse_local_file(file_obj, orig_name, upload_url='', asset=None):
     """解析上传的本地文件 -> (title, markdown, meta_dict)。
 
     file_obj: Django UploadedFile（具备 .read() / .name）。
@@ -40,36 +40,21 @@ def parse_local_file(file_obj, orig_name, upload_url=''):
     except Exception:
         pass
 
-    if ext in ('.md', '.markdown', '.txt'):
-        raw = file_obj.read()
-        text = raw.decode('utf-8', errors='ignore')
-        return name, text, {'ext': ext}
-
-    if ext == '.docx':
-        from docx import Document
-        doc = Document(file_obj)
-        lines = [p.text for p in doc.paragraphs if p.text.strip()]
-        md = '\n\n'.join(lines)
-        return name, md, {'ext': ext}
-
-    if ext == '.pdf':
-        import PyPDF2
-        reader = PyPDF2.PdfReader(file_obj)
-        pages = [ (p.extract_text() or '') for p in reader.pages ]
-        md = '\n\n'.join(pages)
-        return name, md, {'ext': ext, 'pages': len(reader.pages)}
-
-    if ext == '.pptx':
-        from pptx import Presentation
-        prs = Presentation(file_obj)
-        blocks = []
-        for i, slide in enumerate(prs.slides, 1):
-            blocks.append(f'\n## 第 {i} 页')
-            for shape in slide.shapes:
-                if shape.has_text_frame and shape.text_frame.text.strip():
-                    blocks.append(shape.text_frame.text.strip())
-        return name, '\n'.join(blocks), {'ext': ext, 'slides': len(prs.slides)}
-
+    from .document_parser import parse, PARSER_VERSION
+    from .models import ParsedDocument
+    cached = ParsedDocument.objects.filter(asset=asset, parser_version=PARSER_VERSION).first() if asset else None
+    if cached:
+        return name, cached.content_md, cached.metadata
+    raw = file_obj.read()
+    file_obj.seek(0)
+    parsed, metadata = parse(raw, orig_name)
+    if parsed is not None:
+        if not parsed.strip():
+            raise ValueError('未解析到有效正文，原件已保留')
+        if asset:
+            ParsedDocument.objects.get_or_create(asset=asset, parser_version=PARSER_VERSION,
+                defaults={'content_md': parsed, 'metadata': metadata})
+        return name, parsed, metadata
     if ext == '.doc':
         raise ValueError('旧版 .doc 需要 LibreOffice 转换，当前版本暂不支持，请另存为 .docx。')
 
@@ -90,8 +75,7 @@ def parse_local_file(file_obj, orig_name, upload_url=''):
         except Exception:
             pass
         md = (f'![{name}]({upload_url or orig_name})\n\n'
-              f'> 图片 OCR 识别结果（已结构化清洗：修正误识、统一格式、过滤无效内容）：\n\n'
-              f'{ocr_md or "（OCR 暂不可用，请安装 Tesseract-OCR 并加入 PATH）"}')
+              f'> OCR 转写需核对原图。\n\n{ocr_md}' if ocr_md else f'![{name}]({upload_url or orig_name})')
         return name, md, {'ext': ext, 'ocr': 'done' if ocr_md else 'unavailable'}
 
     raise ValueError(f'暂不支持的文件类型：{ext}')

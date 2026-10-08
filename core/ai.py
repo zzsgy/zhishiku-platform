@@ -12,6 +12,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from .models import SystemConfig
+from django.db import transaction
+from django.core.exceptions import ValidationError
 
 logger = logging.getLogger('kb')
 
@@ -81,6 +83,7 @@ def migrate_legacy_key():
     SystemConfig.set_value('dashscope_api_key', '')
 
 
+@transaction.atomic
 def upsert_provider(data):
     """新增或更新一个服务；返回其 id。"""
     providers = get_providers()
@@ -92,6 +95,21 @@ def upsert_provider(data):
     base_url = (data.get('base_url') or '').strip()
     enabled = bool(data.get('enabled'))
     is_default = bool(data.get('is_default'))
+
+    from urllib.parse import urlparse
+    endpoint = urlparse(base_url)
+    if ptype not in PROVIDER_TYPES or not model or len(model) > 128 or len(name) > 128:
+        raise ValidationError('请选择支持的服务类型并填写有效模型名/服务名')
+    if endpoint.scheme not in {'http', 'https'} or not endpoint.hostname or endpoint.username or endpoint.password:
+        raise ValidationError('接口地址必须是无账号密码的 http/https 地址')
+    for field in ('enabled', 'is_default', 'auth_required', 'local'):
+        if field in data and not isinstance(data[field], bool):
+            raise ValidationError(field + ' 必须是布尔值')
+
+    if api_key:
+        from .secrets import store_secret
+        from uuid import uuid4
+        api_key = store_secret('ai-' + (pid or uuid4().hex), api_key)
 
     if not pid:
         # 自动生成 id
@@ -116,12 +134,14 @@ def upsert_provider(data):
             'name': name, 'type': ptype, 'api_key': api_key,
             'model': model, 'base_url': base_url,
             'enabled': enabled, 'is_default': is_default,
+            'auth_required': data.get('auth_required', True), 'local': data.get('local', False),
         })
     else:
         providers.append({
             'id': pid, 'name': name, 'type': ptype, 'api_key': api_key,
             'model': model, 'base_url': base_url,
             'enabled': enabled, 'is_default': is_default,
+            'auth_required': data.get('auth_required', True), 'local': data.get('local', False),
         })
 
     if is_default:
@@ -135,6 +155,7 @@ def upsert_provider(data):
     return pid
 
 
+@transaction.atomic
 def delete_provider(pid):
     providers = [p for p in get_providers() if p.get('id') != pid]
     if not any(p.get('is_default') for p in providers) and providers:
@@ -142,6 +163,7 @@ def delete_provider(pid):
     _save_providers(providers)
 
 
+@transaction.atomic
 def set_default(pid):
     providers = get_providers()
     hit = False
@@ -159,36 +181,11 @@ def set_default(pid):
 # ----------------------------- 调用 -----------------------------
 def _call_openai(provider, system_prompt, user_prompt, model=None, temperature=0.7):
     """OpenAI 兼容 /chat/completions 调用；失败/无 Key 返回 None。"""
-    import requests
-    key = (provider.get('api_key') or '').strip()
-    if not key:
-        return None
-    base = (provider.get('base_url') or '').rstrip('/')
-    if not base:
-        return None
-    url = base + '/chat/completions'
-    model = model or provider.get('model') or 'gpt-3.5-turbo'
-    payload = {
-        'model': model,
-        'messages': [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt},
-        ],
-        'temperature': temperature,
-    }
-    headers = {
-        'Authorization': f'Bearer {key}',
-        'Content-Type': 'application/json',
-    }
-    try:
-        r = requests.post(url, json=payload, headers=headers, timeout=90)
-        if r.status_code == 200:
-            data = r.json()
-            return data['choices'][0]['message']['content']
-        logger.error('AI 调用失败 %s: %s', r.status_code, r.text[:300])
-    except Exception as e:
-        logger.error('AI 调用异常: %s', e)
-    return None
+    from .ai_result import call
+    result = call(provider, system_prompt, user_prompt, model, temperature)
+    if not result.ok:
+        logger.warning('AI provider=%s error=%s', result.provider, result.error_code)
+    return result.content if result.ok else None
 
 
 def ask_provider(pid, system_prompt, user_prompt, model=None, temperature=0.7):
@@ -207,6 +204,9 @@ def ask_ai(system_prompt, user_prompt, provider_id=None, model=None, temperature
     # 默认且启用的服务排在最前；依次尝试，首个成功即返回（实现「失败退化」）
     candidates = [p for p in providers if p.get('is_default') and p.get('enabled')]
     candidates += [p for p in providers if p.get('enabled') and not p.get('is_default')]
+    import os
+    if os.environ.get('ZHISHIKU_AI_ALLOW_FALLBACK', '0') != '1':
+        candidates = candidates[:1]
     for p in candidates:
         ans = ask_provider(p['id'], system_prompt, user_prompt, model, temperature)
         if ans:
@@ -237,7 +237,7 @@ def test_provider(pid):
     p = get_provider(pid)
     if not p:
         return False, '服务不存在'
-    if not (p.get('api_key') or '').strip():
+    if p.get('auth_required', True) and not (p.get('api_key') or '').strip():
         return False, '未配置 API Key'
     ans = _call_openai(p, '你是测试助手。', '请只回复「ok」两个字。', temperature=0.1)
     if ans:
@@ -246,7 +246,13 @@ def test_provider(pid):
 
 
 def ai_available():
-    return any(p.get('enabled') and (p.get('api_key') or '').strip() for p in get_providers())
+    return any(p.get('enabled') and provider_configured(p) for p in get_providers())
+
+
+def provider_configured(provider):
+    from .secrets import read_secret
+    return (provider.get('local', False) and not provider.get('auth_required', True)) or bool(
+        read_secret(provider.get('api_key', '')))
 
 
 def ai_status():
@@ -255,7 +261,8 @@ def ai_status():
         'id': p.get('id'), 'name': p.get('name'), 'type': p.get('type'),
         'model': p.get('model'), 'base_url': p.get('base_url'),
         'enabled': p.get('enabled', False), 'is_default': p.get('is_default', False),
-        'configured': bool((p.get('api_key') or '').strip()),
+        'configured': provider_configured(p),
+        'auth_required': p.get('auth_required', True), 'local': p.get('local', False),
     } for p in get_providers()]
 
 

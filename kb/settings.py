@@ -29,9 +29,37 @@ BACKUP_ROOT = Path(_env_backup_root) if _env_backup_root else (BASE_DIR.parent /
 # 单个备份包允许的最大体积（字节），超出时中断并提示，防止磁盘被写满。
 BACKUP_MAX_BYTES = int(os.environ.get('ZHISHIKU_BACKUP_MAX_BYTES', str(8 * 1024 ** 3)))
 
-SECRET_KEY = 'dev-insecure-key-change-me-in-production-2026knowledge'
-DEBUG = True
-ALLOWED_HOSTS = ['*']
+# Keep the per-instance secret outside distributions and backups.
+_secret_path = BASE_DIR / '.instance-secret'
+SECRET_KEY = os.environ.get('ZHISHIKU_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    from django.core.management.utils import get_random_secret_key
+    try:
+        with _secret_path.open('x', encoding='utf-8') as _secret_file:
+            _secret_file.write(get_random_secret_key())
+    except FileExistsError:
+        pass
+    SECRET_KEY = _secret_path.read_text(encoding='utf-8').strip()
+DEBUG = os.environ.get('ZHISHIKU_DEBUG', '0') == '1'
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ZHISHIKU_ALLOWED_HOSTS', '127.0.0.1,localhost,[::1]').split(',') if h.strip()]
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = LOGIN_URL
+UPLOAD_MAX_BYTES = int(os.environ.get('ZHISHIKU_UPLOAD_MAX_BYTES', str(64 * 1024**2)))
+DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+if os.environ.get('ZHISHIKU_NETWORK_MODE', '0') == '1':
+    if not os.environ.get('ZHISHIKU_SECRET_KEY') or '*' in ALLOWED_HOSTS:
+        raise RuntimeError('网络部署需要独立密钥和明确的可信主机')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = False
 
 INSTALLED_APPS = [
     'simpleui',
@@ -42,7 +70,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'import_export',
-    'mdeditor',
     # project apps
     'core',
     'dashboard',
@@ -60,10 +87,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.security.AccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.OperationLogMiddleware',
@@ -93,7 +122,8 @@ WSGI_APPLICATION = 'kb.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(os.environ.get('ZHISHIKU_DB_PATH', str(BASE_DIR / 'db.sqlite3'))),
+        'OPTIONS': {'timeout': 20},
     }
 }
 
@@ -114,7 +144,7 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'static_collected'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('ZHISHIKU_MEDIA_ROOT', str(BASE_DIR / 'media')))
 
 # Knowledge repository directory layout (under C:\ZSK\ZhiShi)
 ZHI_SHI_DIRS = {
@@ -158,7 +188,9 @@ _LOG_HANDLER_NAMES = ['console']
 if _LOG_FILE_OK:
     _LOG_HANDLERS['file'] = {
         'level': 'INFO',
-        'class': 'logging.FileHandler',
+        'class': 'logging.handlers.RotatingFileHandler',
+        'maxBytes': 5 * 1024**2,
+        'backupCount': 5,
         'filename': LOG_FILE,
         'encoding': 'utf-8',
         'formatter': 'verbose',
@@ -179,11 +211,3 @@ LOGGING = {
 # simpleui tweaks
 SIMPLEUI_HOME_TITLE = '知识库平台'
 SIMPLEUI_HOME_ICON = 'fa fa-book'
-
-# mdeditor upload (within MEDIA_ROOT)
-MDEDITOR_CONFIGS = {
-    'default': {
-        'width': '100%',
-        'upload_image_formats': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
-    }
-}

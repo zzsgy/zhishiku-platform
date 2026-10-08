@@ -2,6 +2,8 @@
 <html lang="zh-CN" data-theme="{{ theme }}">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script src="{% vstatic 'js/request.js' %}"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ platform_name }}{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{% vstatic 'favicon.svg' %}">
@@ -113,7 +115,7 @@
         <form class="kb-global-search" method="get" action="/office/search/" role="search">
           <i class="bi bi-search kb-global-search-icon" aria-hidden="true"></i>
           <input type="text" name="q" class="form-control form-control-sm" value="{{ global_search_q|default:'' }}"
-                 placeholder="搜索知识、文件或全网内容" aria-label="聚合检索关键词" required>
+                 placeholder="搜索本地知识与工作资料" aria-label="聚合检索关键词" required>
           {% comment %}
             范围选择器：知识库 / 办公平台 / 全网，支持单选 / 多选 / 全选（至少保留一项）。
             选择随表单提交为 scopes 参数；auto-close=outside 让勾选多项时菜单不闪退。
@@ -133,10 +135,10 @@
               </div>
               <label class="kb-scope-opt"><input type="checkbox" value="kb" checked><i class="bi bi-archive"></i>知识库</label>
               <label class="kb-scope-opt"><input type="checkbox" value="office" checked><i class="bi bi-briefcase"></i>办公平台</label>
-              <label class="kb-scope-opt"><input type="checkbox" value="web" checked><i class="bi bi-globe2"></i>全网</label>
+              <label class="kb-scope-opt"><input type="checkbox" value="web"><i class="bi bi-globe2"></i>全网</label>
             </div>
           </div>
-          <input type="hidden" name="scopes" class="kb-scope-input" value="all">
+          <input type="hidden" name="scopes" class="kb-scope-input" value="kb,office">
           <button class="btn btn-sm btn-primary kb-search-submit" type="submit"><i class="bi bi-search"></i><span>搜索</span></button>
         </form>
       </div>
@@ -145,7 +147,7 @@
       {% block content %}{% endblock %}
     </div>
     <footer class="kb-footer small">
-      {{ platform_name }} · 本地知识库平台 · Django 5.2
+      {{ platform_name }} · 本地知识工作台
     </footer>
   </main>
 
@@ -157,8 +159,14 @@
       var openBtn = document.getElementById('kbMenuToggle');
       var closeBtn = document.getElementById('kbSidebarClose');
       var backdrop = document.getElementById('kbSidebarBackdrop');
-      function closeNav() { sidebar.classList.remove('is-open'); document.body.classList.remove('kb-nav-open'); }
-      function openNav() { sidebar.classList.add('is-open'); document.body.classList.add('kb-nav-open'); }
+      var main=document.querySelector('.kb-main'), previousFocus=null;
+      var mobile=window.matchMedia('(max-width: 991.98px)');
+      function closeNav() { sidebar.classList.remove('is-open'); document.body.classList.remove('kb-nav-open'); sidebar.inert=mobile.matches; main.inert=false; if(openBtn)openBtn.setAttribute('aria-expanded','false'); sidebar.removeAttribute('aria-modal'); sidebar.removeAttribute('role'); if(previousFocus){previousFocus.focus();previousFocus=null;} }
+      function openNav() { previousFocus=document.activeElement; sidebar.inert=false; sidebar.classList.add('is-open'); document.body.classList.add('kb-nav-open'); main.inert=true; sidebar.setAttribute('role','dialog'); sidebar.setAttribute('aria-modal','true'); if(openBtn)openBtn.setAttribute('aria-expanded','true'); if(closeBtn)closeBtn.focus(); }
+      if(openBtn){openBtn.setAttribute('aria-controls','kbSidebar');openBtn.setAttribute('aria-expanded','false');}
+      sidebar.inert=mobile.matches;
+      mobile.addEventListener('change',function(){closeNav();});
+      document.addEventListener('keydown',function(event){if(!sidebar.classList.contains('is-open'))return;if(event.key==='Escape'){event.preventDefault();closeNav();}if(event.key==='Tab'){var focusable=Array.from(sidebar.querySelectorAll('a,button,input,select,textarea,[tabindex]')).filter(function(el){return el.tabIndex>=0&&el.getClientRects().length;});var first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
       if (openBtn) openBtn.addEventListener('click', openNav);
       if (closeBtn) closeBtn.addEventListener('click', closeNav);
       if (backdrop) backdrop.addEventListener('click', closeNav);

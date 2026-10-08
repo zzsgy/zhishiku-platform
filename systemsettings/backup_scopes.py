@@ -41,6 +41,11 @@ BACKUP_ROOT = Path(settings.BACKUP_ROOT)
 # 知识数据表：平台产生 / 用户录入的全部知识记录。book / note / golden 等
 # “笔记型”数据也在其中——它们同样是用户产出，不能丢。
 KNOWLEDGE_MODELS = [
+    'core.Asset',
+    'core.ParsedDocument',
+    'core.NodeProposal',
+    'core.DeletedNode',
+    'core.NodeRevision',
     'core.KnowledgeBase',     # 知识库分库
     'core.KnowledgeNode',     # 知识节点（知识库 + WiKI + 自媒体草稿）
     'core.NodeNote',          # 节点笔记
@@ -77,11 +82,12 @@ CODE_EXCLUDE_DIRS = {
     'media',                                # 上传媒体原件：属知识资料（知识包/迁移包带走）；
                                             # 系统包必须清空，只由骨架补空目录
     'backups',                              # 历史备份
-    'ffmpeg_tmp',                           # 外部工具的解压临时目录
+    'ffmpeg_tmp', 'temp', 'tmp', 'work', '.runtime',                           # 外部工具的解压临时目录
 }
 
 # 代码目录内一律排除的文件名。
 CODE_EXCLUDE_FILES = {
+    '.instance-secret', '.env',
     '.DS_Store', 'Thumbs.db', 'desktop.ini',
     '_tmp_last.txt', '_z.txt',
     'probe_out.txt', 'repro_out.txt', 'server_run.log',
@@ -96,7 +102,7 @@ CODE_EXCLUDE_SUFFIXES = (
 )
 
 # 代码目录内一律排除的文件名前缀（本机诊断脚本产物）。
-CODE_EXCLUDE_PREFIXES = ('_diag', '_probe', '_repro', '_check')
+CODE_EXCLUDE_PREFIXES = ('.env.', '.upload-', '.publish-', '_diag', '_probe', '_repro', '_check')
 
 # 仅「系统包」排除：运行数据库与上传媒体。
 #   系统包的目标是「空运行平台」，知识数据的载体必须为空——
@@ -169,11 +175,10 @@ SCOPES = {
             '系统配置（含 AI 服务 API Key，不随知识资料外发）',
             '平台运行数据库原文件（知识记录已导出为 JSON，避免带入无关账号数据）',
         ],
-        'restore_hint': '解包后运行包内「恢复知识.cmd」，把知识数据覆盖回平台对应目录；'
-                        'IP 地址、端口、依赖环境均不受影响。',
+        'restore_hint': '使用 restore_backup 校验 ZIP 并恢复到新目录；完成核对后再切换，禁止覆盖当前平台。',
         'srcs': [
             {'path': DATA_ROOT, 'dest': 'ZhiShi', 'filter': 'data'},
-            {'path': CODE_ROOT / 'media', 'dest': 'media', 'filter': 'data'},
+            {'path': Path(settings.MEDIA_ROOT), 'dest': 'media', 'filter': 'data'},
         ],
         'db_dump': KNOWLEDGE_MODELS,
         'embed_db': False,
@@ -251,7 +256,8 @@ SCOPES = {
         'restore_hint': '新电脑解压后双击「一键安装.cmd」，脚本自动建环境并沿用包内数据库，'
                         '安装完成即恢复原平台的运行状态与全部知识资料。',
         'srcs': [
-            {'path': CODE_ROOT, 'dest': 'XiTong', 'filter': 'code_with_data'},
+            {'path': CODE_ROOT, 'dest': 'XiTong', 'filter': 'code'},
+            {'path': Path(settings.MEDIA_ROOT), 'dest': 'XiTong/media', 'filter': 'data'},
             {'path': DATA_ROOT, 'dest': 'ZhiShi', 'filter': 'data'},
         ],
         'db_dump': KNOWLEDGE_MODELS,

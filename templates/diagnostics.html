@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>运行诊断</h1>
+<p>程序所在磁盘剩余 {{ free_gb }} GB · <a href="/settings/">返回设置</a></p>
+{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+<h2>导出未完成</h2>
+{% for node in failed_exports %}<div class="d-flex justify-content-between border-bottom py-2"><span><a href="/wiki/node/{{ node.pk }}/">{{ node.title }}</a> · {{ node.export_error }}</span><form method="post">{% csrf_token %}<input type="hidden" name="node" value="{{ node.pk }}"><button class="btn btn-sm btn-primary">重试导出</button></form></div>{% empty %}<p>当前没有失败的知识导出。</p>{% endfor %}
+<h2>排队与执行中的任务</h2>
+{% for job in active_jobs %}<p>{{ job.kind }} #{{ job.pk }} · {{ job.status }} · {{ job.created }}</p>{% empty %}<p>当前没有活动任务。</p>{% endfor %}
+<h2>最近失败的任务</h2>
+{% for job in failed_jobs %}<p>{{ job.kind }} #{{ job.pk }} · {{ job.error }}</p>{% empty %}<p>当前没有失败任务。</p>{% endfor %}
+{% endblock %}

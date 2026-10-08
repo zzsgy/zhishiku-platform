@@ -5,7 +5,6 @@
 """
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 from core.models import KnowledgeBase, KnowledgeNode
 from core.services import sync_node_to_file, log_operation, auto_link_edges
@@ -14,7 +13,9 @@ from core.ai import ask_ai, ai_available
 
 def index(request):
     nodes = KnowledgeNode.objects.filter(category='自媒体').order_by('-updated')
-    return render(request, 'selfmedia.html', {'nodes': nodes})
+    from core.pagination import paginate
+    page = paginate(request, nodes, 30)
+    return render(request, 'selfmedia.html', {'nodes': page, 'page_obj': page})
 
 
 def create(request):
@@ -37,9 +38,11 @@ def create(request):
 
 
 def edit(request, pk):
-    node = get_object_or_404(KnowledgeNode, pk=pk)
+    node = get_object_or_404(KnowledgeNode, pk=pk, category='自媒体')
     if request.method != 'POST':
         return redirect('/selfmedia/')
+    if request.POST.get('version') != str(node.version):
+        return JsonResponse({'ok': False, 'error': '草稿已在其它窗口修改，请核对后重试'}, status=409)
     node.title = (request.POST.get('title') or '').strip() or node.title
     node.content_md = request.POST.get('content_md', '')
     node.save()
@@ -50,19 +53,19 @@ def edit(request, pk):
 
 
 def delete(request, pk):
-    node = get_object_or_404(KnowledgeNode, pk=pk)
+    node = get_object_or_404(KnowledgeNode, pk=pk, category='自媒体')
     if request.method == 'POST':
         log_operation('selfmedia', 'delete', detail=node.title)
-        node.delete()
+        from core.services import recycle_node
+        recycle_node(node)
     return redirect('/selfmedia/')
 
 
-@csrf_exempt
 def ai_polish(request, pk):
     """AI 润色草稿：无可用 Key 时返回降级提示。"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'method'})
-    node = get_object_or_404(KnowledgeNode, pk=pk)
+    node = get_object_or_404(KnowledgeNode, pk=pk, category='自媒体')
     system = ('你是资深新媒体文案顾问，擅长把简短提纲或草稿改写成适合社交平台发布的'
               '吸睛文案：保留原意与要点，语言生动、有画面感，并给出 1-2 句抓眼球的开头。'
               '直接输出润色后的文案正文，不要解释过程。')

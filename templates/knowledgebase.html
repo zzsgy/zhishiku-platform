@@ -2,6 +2,7 @@
 {% load kb_extras %}
 {% block title %}知识库 - {{ platform_name }}{% endblock %}
 {% block content %}
+{% include "_pagination.html" %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2 class="mb-0"><i class="bi bi-archive"></i> 知识库</h2>
   <span class="text-muted small">知识库 · 灵感库 · 金句库 · 链接库（运行档案库独立存放）</span>
@@ -113,7 +114,7 @@
           <td class="small text-muted">{{ n.tags|default:'—' }}</td>
           <td class="small text-muted">{{ n.updated|date:'m-d H:i' }}</td>
           <td>
-            <form method="post" action="/knowledgebase/node/{{ n.pk }}/delete/" onsubmit="return confirm('确定删除知识节点《{{ n.title }}》？将同时删除其阅读笔记与关联关系。')" class="d-inline">
+            <form method="post" action="/knowledgebase/node/{{ n.pk }}/delete/" onsubmit="return confirm('将此知识及其笔记、金句、关系移入回收站？')" class="d-inline">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> 删除</button>
             </form>

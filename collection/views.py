@@ -7,11 +7,12 @@
 import os
 import re
 import json
+from uuid import uuid4
+from core.storage import save_upload, media_url
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from urllib.parse import quote
 
 from core.models import CollectionItem, KnowledgeBase, LinkItem
@@ -191,7 +192,6 @@ def index(request):
     })
 
 
-@csrf_exempt
 def input_text(request):
     """随身记「保存知识库」入口：把一条文本快速落成知识节点。
 
@@ -213,8 +213,10 @@ def input_text(request):
         status='done', base=base)
     try:
         node = link_collection_to_node(item, base=base, title=title, category='文本输入')
+        item.status = 'done' if node.export_status == 'done' else 'failed'
+        item.save(update_fields=['status'])
         log_operation('collection', 'input_text', detail=title)
-        return JsonResponse({'ok': True, 'id': node.pk})
+        return JsonResponse({'ok': node.export_status == 'done', 'id': node.pk, 'export_status': node.export_status})
     except Exception as e:
         logger.error('input_text link failed: %s', e)
         return JsonResponse({'ok': False, 'error': str(e)[:120]}, status=400)
@@ -247,16 +249,13 @@ def import_local(request):
     display = title or f.name
     item = _start_item('local', display, base=base)
 
-    upload_dir = settings.MEDIA_ROOT / 'uploads'
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    dest = upload_dir / f.name
-    with open(dest, 'wb') as out:
-        for chunk in f.chunks():
-            out.write(chunk)
-
     try:
+        dest, asset = save_upload(f)
+        item.asset = asset
+        item.original_name = f.name
+        item.save(update_fields=['asset', 'original_name'])
         name, md, meta = parse_local_file(
-            f, f.name, upload_url=f'/media/uploads/{quote(f.name)}')
+            f, f.name, upload_url=media_url(dest), asset=asset)
     except Exception as e:
         msg = f'解析失败：{e}'
         _settle_item(item, 'failed', msg)
@@ -271,16 +270,24 @@ def import_local(request):
     item.save(update_fields=['parsed_md', 'raw_text'])
 
     final_title, level = (title or name), 'success'
+    successful = False
     try:
         node = link_collection_to_node(item, base=base, title=title or name, category='本地导入')
         final_title = node.title
+        successful = node.export_status == 'done'
         msg = f'已导入并写入知识库：{node.title}（{meta.get("ext", "")}）'
+        if meta.get('warnings'):
+            msg += '；' + '；'.join(meta['warnings'])
+            level = 'warning'
     except Exception as e:
         level = 'warning'
         msg = f'已解析但未落库：{e}'
-    _settle_item(item, 'done', msg, title=final_title)
+    if not successful:
+        msg += '；原件/解析已保留，知识入库或导出未完成，可在诊断页重试导出'
+        level = 'warning'
+    _settle_item(item, 'done' if successful else 'failed', msg, title=final_title)
     log_operation('collection', 'import_local', detail=title or name)
-    return _reply_state(request, ok=True, status='done', level=level,
+    return _reply_state(request, ok=successful, status='done' if successful else 'failed', level=level,
                         message=msg, kind='local', title=final_title,
                         item_id=(item.pk if item else None))
 
@@ -320,47 +327,40 @@ def import_office(request):
         item.note = '正在存入办公平台「%s」…' % cat_label
         item.save(update_fields=['note'])
 
-    target_dir = workfile_dir(cat_label)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    stamp = timezone.now().strftime('%Y%m%d%H%M%S')
-    dest = target_dir / ('%s_%s%s' % (stamp, sanitize_filename(stem), ext_with_dot or '.%s' % ext))
-
-    # 1) 先落盘副本（与上传流解耦，保证字节完整）
     try:
-        with open(dest, 'wb') as out:
-            for chunk in f.chunks():
-                out.write(chunk)
+        dest, asset = save_upload(f)
+        item.asset, item.original_name = asset, f.name
+        item.save(update_fields=['asset', 'original_name'])
     except Exception as e:
-        msg = '保存失败：%s' % e
+        msg = '原件保存失败：%s' % e
         _settle_item(item, 'failed', msg)
-        return _reply_state(request, ok=False, status='failed', level='error',
-                            message=msg, kind='office', title=display,
-                            item_id=(item.pk if item else None))
+        return _reply_state(request, ok=False, status='failed', level='error', message=msg,
+                            kind='office', title=display, item_id=item.pk)
 
     # 2) 从落盘文件解析；失败也保留副本并登记，至少可在办公平台打开原件
     parsed_title, md, warn = (stem or '未命名'), '', ''
     try:
         with open(dest, 'rb') as fh:
-            parsed_title, md, _meta = parse_local_file(fh, f.name)
+            parsed_title, md, _meta = parse_local_file(fh, f.name, asset=asset, upload_url=media_url(dest))
     except Exception as e:
         warn = '（内容解析跳过：%s）' % str(e)[:60]
 
     # 3) 登记到办公平台「工作文件目录」的对应分类
     try:
         entry = index_uploaded_file(dest, title=title or parsed_title or stem,
-                                    category=cat_label, extracted=md or '')
+                                    category=cat_label, extracted=md or '', asset=asset)
         log_operation('office', 'workfile_in', detail='%s/%s' % (cat_label, entry.title))
         msg = '已存入办公平台「%s」：%s%s' % (cat_label, entry.title, warn)
-        _settle_item(item, 'done', msg, title=entry.title, source_url=str(dest))
+        _settle_item(item, 'done', msg, title=entry.title, source_url=media_url(dest))
         return _reply_state(request, ok=True, status='done', message=msg,
                             kind='office', title=entry.title,
-                            item_id=(item.pk if item else None), source_url=str(dest))
+                            item_id=(item.pk if item else None), source_url=media_url(dest))
     except Exception as e:
         msg = '文件已保存但登记失败：%s' % e
-        _settle_item(item, 'failed', msg, title=display, source_url=str(dest))
+        _settle_item(item, 'failed', msg, title=display, source_url=media_url(dest))
         return _reply_state(request, ok=False, status='failed', level='error',
                             message=msg, kind='office', title=display,
-                            item_id=(item.pk if item else None), source_url=str(dest))
+                            item_id=(item.pk if item else None), source_url=media_url(dest))
 
 
 def parse_web(request):
@@ -383,7 +383,12 @@ def parse_web(request):
         kind='web', title=title or t, parsed_md=md, status='done', base=base, source_url=url)
     try:
         node = link_collection_to_node(item, base=base, title=title or t, category='网页解析')
-        messages.success(request, f'已解析网页并写入知识库：{node.title}')
+        item.status = 'done' if node.export_status == 'done' else 'failed'
+        item.save(update_fields=['status'])
+        if node.export_status == 'done':
+            messages.success(request, f'已解析网页并写入知识库：{node.title}')
+        else:
+            messages.warning(request, '正文已在数据库保存，文件导出失败，可在诊断页重试')
     except Exception as e:
         messages.warning(request, f'已解析但未落库：{e}')
     log_operation('collection', 'parse_web', detail=url)
@@ -425,17 +430,14 @@ def import_image(request):
     display = title or f.name or '粘贴截图'
     item = _start_item('image', display, base=base)
 
-    upload_dir = settings.MEDIA_ROOT / 'uploads'
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    name = _safe_image_name(f.name)
-    dest = upload_dir / name
-    with open(dest, 'wb') as out:
-        for chunk in f.chunks():
-            out.write(chunk)
-    upload_url = f'/media/uploads/{name}'
-
+    name = f.name
+    upload_url = ''
     try:
-        name2, md, meta = parse_local_file(f, name, upload_url=upload_url)
+        dest, asset = save_upload(f)
+        item.asset, item.original_name = asset, f.name
+        item.save(update_fields=['asset', 'original_name'])
+        upload_url = media_url(dest)
+        name2, md, meta = parse_local_file(f, f.name, upload_url=upload_url, asset=asset)
     except Exception as e:
         msg = f'图片处理失败：{e}'
         _settle_item(item, 'failed', msg, source_url=upload_url)
@@ -450,17 +452,19 @@ def import_image(request):
     item.save(update_fields=['parsed_md', 'raw_text', 'source_url'])
 
     final_title, level = (title or name2), 'success'
+    successful = False
     try:
         node = link_collection_to_node(item, base=base, title=title or name2, category='图片上传')
         final_title = node.title
-        extra = '（含 OCR 文字）' if meta.get('ocr') == 'done' else ''
+        successful = node.export_status == 'done'
+        extra = '（含 OCR 文字，请核对）' if meta.get('ocr') == 'done' else '（原图已保留，OCR 未完成）'
         msg = f'图片已入库：{node.title}{extra}'
     except Exception as e:
         level = 'warning'
         msg = f'已保存但未落库：{e}'
-    _settle_item(item, 'done', msg, title=final_title, source_url=upload_url)
+    _settle_item(item, 'done' if successful else 'failed', msg, title=final_title, source_url=upload_url)
     log_operation('collection', 'import_image', detail=title or name)
-    return _reply_state(request, ok=True, status='done', level=level,
+    return _reply_state(request, ok=successful, status='done' if successful else 'failed', level=level,
                         message=msg, kind='image', title=final_title,
                         item_id=(item.pk if item else None), source_url=upload_url)
 
@@ -513,33 +517,16 @@ def parse_video(request):
     if not url:
         return _reply_state(request, ok=False, status='failed', level='error',
                             message='请输入视频链接。', reject=True)
-    from core import media
+    from core.jobs import enqueue
+    from core.article_parser import _host_is_blocked
+    blocked = _host_is_blocked(url)
+    if blocked:
+        return _reply_state(request, ok=False, status='failed', level='error', message=blocked, reject=True)
     base = _pick_base(request.POST.get('base'))
     item = _start_item('video', url, base=base, url=url)
-    if item:
-        item.note = '正在下载视频并转写（较慢，请勿关闭页面）…'
-        item.save(update_fields=['note'])
-    try:
-        title, md = media.video_to_markdown(url, settings.MEDIA_ROOT / 'videos' / 'tmp')
-        md = _enrich_video_with_ai(md, title, url)
-        item.parsed_md = md
-        item.raw_text = md[:2000]
-        item.save(update_fields=['parsed_md', 'raw_text'])
-        node = link_collection_to_node(item, base=base, title=title, category='视频转图文')
-        msg = f'视频转图文完成：{node.title}（已含 AI 智能摘要）'
-        _settle_item(item, 'done', msg, title=node.title, source_url=url)
-        log_operation('collection', 'parse_video', detail=url)
-        return _reply_state(request, ok=True, status='done', message=msg,
-                            kind='video', title=node.title,
-                            item_id=(item.pk if item else None), source_url=url)
-    except Exception as e:
-        msg = f'视频转图文失败：{e}（已归档至链接库）'
-        _settle_item(item, 'failed', msg, title='视频转图文（失败）', source_url=url)
-        record_failed_link(url, 'web', 'unknown', link_type='video')
-        log_operation('collection', 'parse_video', detail=f'{url}（失败）')
-        return _reply_state(request, ok=False, status='failed', level='error',
-                            message=msg, kind='video', title='视频转图文（失败）',
-                            item_id=(item.pk if item else None), source_url=url)
+    enqueue('video', {'item_id': item.pk}, key='video:' + str(item.pk))
+    return _reply_state(request, ok=True, status='pending', message='视频任务已接收，可关闭页面；结果会保留在最近收集中',
+                        kind='video', title=url, item_id=item.pk, source_url=url)
 
 
 def _parse_body(request):
@@ -564,7 +551,6 @@ def _infer_link_type(url):
     return 'webpage'
 
 
-@csrf_exempt
 def collection_link_action(request):
     """知识收集：网页解析 / 链接库录入 合并端点（JSON）。
 

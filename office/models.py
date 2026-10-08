@@ -3,6 +3,8 @@ import os
 
 
 class WorkRecord(models.Model):
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
     # 前三个是工作分类；archive 为「归档分类」，用于放置已归档的工作记录
     # （由日期卡片上的「归档」按钮写入，默认列表中不再展示）。
     ARCHIVE_KEY = 'archive'

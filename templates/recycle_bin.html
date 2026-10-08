@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>知识回收站</h1>
+<p>正文、笔记、金句、修订和关系一起保留。恢复遇到编号或关联冲突时会停止，不覆盖当前内容。</p>
+{% for entry in entries %}
+<div class="d-flex justify-content-between border-bottom py-3">
+<span>原节点 {{ entry.original_id }} · {{ entry.created }}</span>
+<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ entry.pk }}"><button class="btn btn-sm btn-primary">恢复</button></form>
+</div>
+{% empty %}<p>回收站为空。</p>{% endfor %}
+{% include "_pagination.html" %}
+{% endblock %}

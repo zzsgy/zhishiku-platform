@@ -8,15 +8,18 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
 from django.http import JsonResponse, FileResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
+from core.secrets import read_secret, store_secret
 from core.models import SystemConfig, KnowledgeBase, KnowledgeNode, OperationLog, CollectionItem
 from core.services import log_operation
 from core import ai as ai_service
 
 from .models import BackupJob
 from . import backup_scopes as bk_scopes
-from .backup_engine import scan as bk_scan, build as bk_build
+from .backup_engine import scan as bk_scan
+from .reliable_backup import build as bk_build
+from django.db import transaction
+from core.jobs import enqueue, recover_expired
 
 
 PLATFORM_ARCH = [
@@ -91,7 +94,7 @@ def _build_tree(root, max_depth=3):
     root = str(root)
     if not os.path.isdir(root):
         return []
-    tree = []
+    remaining = [600]
 
     def walk(path, depth):
         if depth > max_depth:
@@ -99,8 +102,12 @@ def _build_tree(root, max_depth=3):
         items = []
         try:
             for name in sorted(os.listdir(path)):
-                if name in _TREE_EXCLUDE:
+                if name in _TREE_EXCLUDE or name.startswith('.') or os.path.islink(os.path.join(path, name)):
                     continue
+                if remaining[0] <= 0:
+                    items.append({'name': '更多目录请在本机查看', 'type': 'leaf'})
+                    break
+                remaining[0] -= 1
                 full = os.path.join(path, name)
                 try:
                     if os.path.isdir(full):
@@ -121,29 +128,12 @@ def index(request):
     zhi_shi_tree = _build_tree(settings.ZHI_SHI_ROOT)
     xi_tong_tree = _build_tree(settings.BASE_DIR)
 
-    # 旧版 dashscope_api_key 迁移进 qwen provider（仅首次）
-    ai_service.migrate_legacy_key()
     providers = ai_service.ai_status()
 
-    gitee_token = SystemConfig.get_value('gitee_token', '').strip()
+    gitee_token = read_secret(SystemConfig.get_value('gitee_token', '').strip())
     gitee_repos = []
     gitee_error = ''
-    if gitee_token:
-        try:
-            import requests
-            r = requests.get('https://gitee.com/api/v5/user/repos',
-                             params={'access_token': gitee_token, 'per_page': 30}, timeout=15)
-            if r.status_code == 200:
-                gitee_repos = [{'name': x.get('name'), 'desc': x.get('description') or '',
-                                'url': x.get('html_url'), 'lang': x.get('language')}
-                               for x in r.json()]
-            else:
-                gitee_error = f'Gitee 返回状态码 {r.status_code}'
-        except Exception as e:
-            gitee_error = f'请求失败：{e}'
-    else:
-        gitee_error = '尚未配置 Gitee Token（在下方工作台设置填写）'
-
+    gitee_error = '点击查看远程仓库状态' if gitee_token else '尚未配置 Gitee Token'
     stats = {
         'base': KnowledgeBase.objects.count(),
         'node': KnowledgeNode.objects.count(),
@@ -157,7 +147,8 @@ def index(request):
         'user_style': SystemConfig.get_value('user_style', ''),
         'user_profile': SystemConfig.get_value('user_profile', ''),
         'user_taboo': SystemConfig.get_value('user_taboo', ''),
-        'gitee_token': gitee_token,
+        'gitee_token': '',
+        'allow_ai_outbound': os.environ.get('ZHISHIKU_ALLOW_AI_OUTBOUND', SystemConfig.get_value('allow_ai_outbound', '0')) == '1',
     }
 
     # 四板块树状总览：平台架构 / 功能模块 / 知识库目录 / 系统目录
@@ -207,9 +198,13 @@ def save_settings(request):
         SystemConfig.set_value('platform_name', (request.POST.get('platform_name') or '智识库').strip())
     if 'theme' in request.POST:
         SystemConfig.set_value('theme', request.POST.get('theme', 'light'))
+    if 'allow_ai_outbound' in request.POST:
+        SystemConfig.set_value('allow_ai_outbound', '1' if request.POST.get('allow_ai_outbound') == 'on' else '0')
     if 'gitee_token' in request.POST:
         # 注：dashscope_api_key 已废弃（已迁移进 qwen provider），不再死写空串
-        SystemConfig.set_value('gitee_token', (request.POST.get('gitee_token') or '').strip())
+        token = (request.POST.get('gitee_token') or '').strip()
+        if token:
+            SystemConfig.set_value('gitee_token', store_secret('gitee', token))
     if 'user_style' in request.POST:
         SystemConfig.set_value('user_style', (request.POST.get('user_style') or '').strip())
     if 'user_profile' in request.POST:
@@ -217,15 +212,16 @@ def save_settings(request):
     if 'user_taboo' in request.POST:
         SystemConfig.set_value('user_taboo', (request.POST.get('user_taboo') or '').strip())
     log_operation('settings', 'save')
+    if 'allow_ai_outbound' in request.POST:
+        return redirect('/settings/?saved=1#ai')
     if 'user_profile' in request.POST or 'user_taboo' in request.POST:
         return redirect('/settings/?saved=1#persona')
     return redirect('/settings/?saved=1')
 
 
-@csrf_exempt
 def gitee_repos_api(request):
     """非阻塞获取 Gitee 仓库列表（带 5 分钟缓存，避免设置页每次打开都同步请求阻塞整页）。"""
-    token = SystemConfig.get_value('gitee_token', '').strip()
+    token = read_secret(SystemConfig.get_value('gitee_token', '').strip())
     if not token:
         return JsonResponse({'ok': False, 'error': '尚未配置 Gitee Token（在下方工作台设置填写）'}, status=200)
     cache = SystemConfig.get_value('gitee_repos_cache', '')
@@ -263,7 +259,7 @@ def api_providers(request):
     """供前端（如划句问 AI 下拉）获取已启用服务列表。"""
     data = [{
         'id': p.get('id'), 'name': p.get('name'),
-        'configured': bool((p.get('api_key') or '').strip()),
+        'configured': ai_service.provider_configured(p),
     } for p in ai_service.get_providers() if p.get('enabled')]
     return JsonResponse({'ok': True, 'providers': data})
 
@@ -286,6 +282,8 @@ def ai_save(request):
         'base_url': data.get('base_url'),
         'enabled': data.get('enabled', False) in (True, 'true', 'on', '1'),
         'is_default': data.get('is_default', False) in (True, 'true', 'on', '1'),
+        'local': data.get('local', False) in (True, 'true', 'on', '1'),
+        'auth_required': data.get('auth_required', True) in (True, 'true', 'on', '1'),
     })
     if request.content_type == 'application/json':
         return JsonResponse({'ok': True, 'id': pid})
@@ -311,6 +309,8 @@ def ai_default(request, pid):
 
 
 def ai_test(request, pid):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
     ok, msg = ai_service.test_provider(pid)
     return JsonResponse({'ok': ok, 'message': msg})
 
@@ -334,7 +334,7 @@ def ai_ask_all(request):
 #   system    系统备份：只含程序与依赖，零知识数据，可发给他人一键装空平台
 #   migration 迁移备份：两者并集，换机整体搬迁
 #
-# 打包在后台线程里跑（大包要几分钟），进度写入 BackupJob 供前端轮询；
+# 打包由独立持久化 worker 执行（大包要几分钟），进度写入 BackupJob 供前端轮询；
 # 本模块只做编排，不重复定义范围、不自己拼路径。
 # ===========================================================================
 def backup_specs_payload():
@@ -378,14 +378,16 @@ def _touch(job_id, **fields):
         pass
 
 
-def _run_backup_job(job_id, kind, options):
-    """后台线程主体：跑一次打包并把结果写回任务记录。"""
+def _run_backup_job(job_id, kind, options, heartbeat=None):
+    """worker 主体：跑一次打包并把结果写回任务记录。"""
     from django.db import connections
 
     spec = bk_scopes.scope_spec(kind)
     _touch(job_id, status='running', progress=1, stage='开始打包')
 
     def on_progress(percent, stage):
+        if heartbeat:
+            heartbeat()
         _touch(job_id, progress=max(0, min(100, int(percent))), stage=(stage or '')[:80])
 
     try:
@@ -412,7 +414,7 @@ def _run_backup_job(job_id, kind, options):
                message=str(e), finished=timezone.now())
         log_operation('settings', 'backup_' + kind + '_failed', detail=str(e))
     finally:
-        # 后台线程持有的连接必须显式关掉，否则 SQLite 会留下悬空连接
+        # worker 持有的连接必须显式关掉，否则 SQLite 会留下悬空连接
         try:
             connections.close_all()
         except Exception:
@@ -444,6 +446,7 @@ def backup_start(request):
     kind = (data.get('kind') or '').strip()
     if kind not in bk_scopes.SCOPES:
         return JsonResponse({'ok': False, 'error': '未知的备份类型'}, status=400)
+    recover_expired()
     if BackupJob.objects.filter(status__in=('pending', 'running')).exists():
         return JsonResponse({'ok': False, 'error': '已有备份任务正在执行，请等它结束后再试。'})
 
@@ -455,9 +458,12 @@ def backup_start(request):
         scope_json=json.dumps({'includes': spec['includes'],
                                'excludes': spec['excludes']}, ensure_ascii=False),
     )
-    threading.Thread(target=_run_backup_job, args=(job.pk, kind, options),
-                     name=f'zhishiku-backup-{job.pk}', daemon=True).start()
-    return JsonResponse({'ok': True, 'id': job.pk})
+    queued = enqueue('backup', {'backup_id': job.pk, 'kind': kind, 'options': options}, key='backup-active')
+    if queued.payload['backup_id'] != job.pk:
+        job.delete()
+        return JsonResponse({'ok': False, 'error': '已有备份任务在队列中'}, status=409)
+    return JsonResponse({'ok': True, 'id': job.pk, 'job_id': queued.pk, 'status': 'pending'}, status=202)
+
 
 
 def backup_status(request, pk):
@@ -476,6 +482,8 @@ def backup_list(request):
 def backup_download(request, pk):
     """下载备份包。"""
     job = get_object_or_404(BackupJob, pk=pk)
+    if not _inside_backup_root(job.package_path):
+        return JsonResponse({'ok': False, 'error': '备份包路径超出允许目录'}, status=403)
     if not job.package_exists:
         return JsonResponse({'ok': False, 'error': '备份包已不在磁盘上（可能已被移动或删除）'},
                             status=404)
@@ -533,6 +541,9 @@ def backup_reveal(request):
     """在资源管理器中打开备份输出目录（让用户直接看到/拷走备份包）。"""
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'}, status=405)
+    import ipaddress
+    if not ipaddress.ip_address(request.META.get('REMOTE_ADDR', '0.0.0.0')).is_loopback:
+        return JsonResponse({'ok': False, 'error': '远程访问请使用下载功能'}, status=403)
     path = str(settings.BACKUP_ROOT)
     try:
         os.makedirs(path, exist_ok=True)

@@ -6,9 +6,10 @@
 import json
 import logging
 import re
+from django.db import transaction
+from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 logger = logging.getLogger('kb')
 
@@ -111,7 +112,6 @@ def _edit_context(node, request=None, form_md=None, loss_warning='', submitted=N
     }
 
 
-@csrf_exempt
 def api_render_md(request):
     """Markdown → HTML（与阅读页同一渲染器）。
 
@@ -133,9 +133,15 @@ def index(request):
     若带 ?title= 且命中节点，则直接打开该知识节点（兼容正文 [[双链]] 跳转）。"""
     title_q = (request.GET.get('title') or '').strip()
     if title_q:
-        node = KnowledgeNode.objects.filter(title__iexact=title_q).first()
+        matches = KnowledgeNode.objects.filter(title__iexact=title_q, status='adopted')
+        if request.GET.get('base'):
+            matches = matches.filter(base_id=request.GET['base'])
+        candidates = list(matches.select_related('base')[:50])
+        if len(candidates) > 1:
+            return render(request, 'link_candidates.html', {'nodes':candidates, 'title':title_q})
+        node = candidates[0] if candidates else None
         if node:
-            html = render_markdown(node.content_md)
+            html = render_markdown(node.content_md, node.base_id)
             backlinks = node.edges_in.select_related('source').all()
             outlinks = node.edges_out.select_related('target').all()
             origin = resolve_origin(node.origin_type, node.origin_ref) if node.origin_type else None
@@ -158,7 +164,12 @@ def index(request):
 
 def node_view(request, pk):
     node = get_object_or_404(KnowledgeNode, pk=pk)
-    html = render_markdown(node.content_md)
+    receipt = request.session.get('saved_node')
+    saved_md = None
+    if receipt and receipt['id'] == node.pk and receipt['version'] == node.version:
+        saved_md = node.content_md
+        request.session.pop('saved_node')
+    html = render_markdown(node.content_md, node.base_id)
     backlinks = node.edges_in.select_related('source').all()
     outlinks = node.edges_out.select_related('target').all()
     notes = node.notes.all()
@@ -168,13 +179,18 @@ def node_view(request, pk):
     origin = resolve_origin(node.origin_type, node.origin_ref) if node.origin_type else None
     return render(request, 'wiki_node.html', {
         'node': node, 'html': html, 'backlinks': backlinks, 'outlinks': outlinks,
-        'notes': notes, 'goldens': goldens, 'origin': origin, 'active_module': 'wiki',
+        'notes': notes, 'goldens': goldens, 'origin': origin, 'active_module': 'wiki', 'saved_md': saved_md,
     })
 
 
+@transaction.atomic
 def node_edit(request, pk):
-    node = get_object_or_404(KnowledgeNode, pk=pk)
+    node = get_object_or_404(KnowledgeNode.objects.select_for_update(), pk=pk)
     if request.method == 'POST':
+        if request.POST.get('version') != str(node.version):
+            return render(request, 'wiki_node_edit.html', _edit_context(node, request,
+                form_md=request.POST.get('content_md', ''), submitted=request.POST,
+                loss_warning='其它窗口已修改此知识，请核对最新版本；你的提交已保留，尚未覆盖原文。'), status=409)
         content_md = request.POST.get('content_md', '')
         force = request.POST.get('force_save') == '1'
         dropped, old_w, new_w = content_loss(node.content_md, content_md)
@@ -196,13 +212,15 @@ def node_edit(request, pk):
         node.node_type = request.POST.get('node_type', node.node_type)
         node.parent_id = _safe_parent(request.POST.get('parent'), self_pk=node.pk)
         node.save()
-        sync_node_to_file(node)
         auto_link_edges(node)
+        transaction.on_commit(lambda: sync_node_to_file(node))
         log_operation('wiki', 'edit_node', detail=node.title)
-        return redirect(f'/wiki/node/{node.pk}/')
+        request.session['saved_node'] = {'id':node.pk, 'version':node.version}
+        return redirect(f'/wiki/node/{node.pk}/?saved=1')
     return render(request, 'wiki_node_edit.html', _edit_context(node, request))
 
 
+@transaction.atomic
 def node_create(request):
     if request.method != 'POST':
         return render(request, 'wiki_node_edit.html', _edit_context(None, request))
@@ -216,13 +234,12 @@ def node_create(request):
         tags=(request.POST.get('tags') or '').strip(),
         parent_id=_safe_parent(request.POST.get('parent')),
     )
-    sync_node_to_file(node)
     auto_link_edges(node)
+    transaction.on_commit(lambda: sync_node_to_file(node))
     log_operation('wiki', 'create_node', detail=node.title)
     return redirect(f'/wiki/node/{node.pk}/')
 
 
-@csrf_exempt
 def api_ask(request):
     """划句问 AI：传入选中文本与问题，返回模型回答（无 Key 时降级提示）。"""
     if request.method != 'POST':
@@ -242,6 +259,7 @@ def api_ask(request):
               '必要时给出可执行的建议。')
     ans = ask_ai(system, f'资料：\n{text}\n\n问题：{question}', provider_id=provider)
     if not ans:
+        return JsonResponse({'ok': False, 'error': 'AI 调用失败或未配置服务，请核对目标服务'}, status=502)
         ans = ('（当前未配置可用的 AI 服务，无法调用 AI。请在「系统设置 → AI 服务配置』'
                '填写对应服务的 API Key 并启用。）') if not ai_available() else '（调用失败，请检查该服务的 Key / 网络）'
     return JsonResponse({'ok': True, 'answer': ans})
@@ -284,7 +302,6 @@ def precipitation(request):
     })
 
 
-@csrf_exempt
 def api_extract(request):
     """发起提炼：接收 sources=[{type,ref}], 调 AI 抽取核心信息，落地为「待处理」节点。
 
@@ -304,6 +321,8 @@ def api_extract(request):
             sources.append((t, r))
     if not sources:
         return JsonResponse({'ok': False, 'error': '未选择有效来源'})
+    if any(not get_source_title(t, r) for t, r in sources):
+        return JsonResponse({'ok': False, 'error': '来源已删除或不存在，请重新选择'}, status=404)
     provider = (data.get('provider') or '').strip() or None
     extracted = extract_knowledge(sources, provider=provider)
     if not extracted:
@@ -320,7 +339,6 @@ def _is_ajax(request):
             or request.content_type == 'application/json')
 
 
-@csrf_exempt
 def precipitation_adopt(request, pk):
     """采纳：待处理 -> 已采纳（正式进入知识层，写文件 + 建边）。
 
@@ -342,7 +360,6 @@ def precipitation_adopt(request, pk):
     return JsonResponse({'ok': True})
 
 
-@csrf_exempt
 def precipitation_discard(request, pk):
     """丢弃：删除待处理草稿（及其关系边），不影响任何原始文档。"""
     if request.method != 'POST':
@@ -360,7 +377,6 @@ def precipitation_discard(request, pk):
     return JsonResponse({'ok': True})
 
 
-@csrf_exempt
 def api_grow(request, pk):
     """AI 自生长：对 WiKI 知识节点自动分类 / 补定义 / 补双链。"""
     if request.method != 'POST':
@@ -393,8 +409,9 @@ def api_grow(request, pk):
         if extra:
             node.content_md = (node.content_md or '').rstrip() + '\n\n## 关联知识\n' + ' '.join('[[%s]]' % x for x in extra) + '\n'
             changed.append('双链')
-    node.save()
-    sync_node_to_file(node)
-    auto_link_edges(node)
-    log_operation('wiki', 'grow', detail=node.title)
-    return JsonResponse({'ok': True, 'changed': changed})
+    from core.models import NodeProposal
+    from core.revisions import EDITABLE_FIELDS
+    proposal = NodeProposal.objects.create(node_id=node.pk, base_version=node.version,
+        proposed={field: getattr(node, field) for field in EDITABLE_FIELDS})
+    log_operation('wiki', 'grow_proposed', detail=node.title)
+    return JsonResponse({'ok': True, 'changed': changed, 'review_url': f'/wiki/proposal/{proposal.pk}/'})

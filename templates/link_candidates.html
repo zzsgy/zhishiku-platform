@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>选择关联知识</h1><p>存在多个名为「{{ title }}」的正式知识。请选择目标；后续可用 [[id:节点编号|显示名]] 建立稳定关联。</p>
+{% for node in nodes %}<p><a href="/wiki/node/{{ node.pk }}/">{{ node.title }}</a> · {{ node.base.name }} · 节点 {{ node.pk }}</p>{% endfor %}
+{% endblock %}

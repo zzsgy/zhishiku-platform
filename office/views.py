@@ -9,6 +9,7 @@
 - 日报 / 周报 / 月报 / 年报生成——同样落库 + 落盘
 """
 import json
+from django.utils import timezone
 import os
 import mimetypes
 import re
@@ -16,8 +17,8 @@ from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, urlparse
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.conf import settings
 from django.http import JsonResponse, FileResponse, HttpResponseForbidden
-from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count, Q
 from django.utils.html import escape
 
@@ -275,22 +276,26 @@ def index(request):
     # 维度一：记录视图 → 工作记录（分类筛选不参与，记录区与分类卡片彻底解耦）
     records = WorkRecord.objects.all()
     if archive_view:
-        records = records.filter(category=ARCHIVE_CAT)
+        records = records.filter(is_archived=True)
     else:
-        records = records.exclude(category=ARCHIVE_CAT)
-    records = list(records[:60])
+        records = records.filter(is_archived=False)
+    from core.pagination import paginate
+    record_page = paginate(request, records.order_by('-date', '-pk'), 50, 'record_page')
+    records = list(record_page)
     day_groups = _group_records(records)
     record_shown = len(records)
     # 报告列表：新生成的排在前面（Report.Meta 不设 ordering，避免迁移状态漂移）
-    reports = list(Report.objects.order_by('-created')[:20])
+    report_page = paginate(request, Report.objects.order_by('-created', '-pk'), 20, 'report_page')
+    reports = list(report_page)
     # 献策列表：同样新生成的排在前面，作为「返回后再次找到输出文件」的主入口
-    advises = list(Advise.objects.order_by('-created')[:20])
+    advise_page = paginate(request, Advise.objects.order_by('-created', '-pk'), 20, 'advise_page')
+    advises = list(advise_page)
     # 「生成报告」模块的默认区间 = 本月 1 日 ~ 今天（用户可在表单里改成任意区间）
     report_default_start = date.today().replace(day=1).strftime('%Y-%m-%d')
     report_default_end = date.today().strftime('%Y-%m-%d')
 
     # 「工作记录」标题旁归档入口的条数
-    archive_count = WorkRecord.objects.filter(category=ARCHIVE_CAT).count()
+    archive_count = WorkRecord.objects.filter(is_archived=True).count()
 
     # 维度二：工作分类 & 关键词 → 工作文件目录（叠加 AND）。cat 全流程只在此处被消费。
     wf_all = WorkFileIndex.objects.all()
@@ -322,6 +327,7 @@ def index(request):
         wf_filters.append('关键词：%s' % wfq)
 
     return render(request, 'office.html', {
+        'record_page': record_page, 'report_page': report_page, 'advise_page': advise_page,
         'day_groups': day_groups,
         'record_shown': record_shown,
         'reports': reports,
@@ -423,7 +429,7 @@ GLOBAL_LIMIT = 8      # 知识库 / 全网每组最多展示条数（办公平�
 
 def _search_kb(q):
     """知识库节点：标题或正文命中（只搜「展示中」的知识库）。"""
-    qs = KnowledgeNode.objects.filter(base__show_in_kb=True).filter(
+    qs = KnowledgeNode.objects.filter(base__show_in_kb=True, status='adopted').filter(
         Q(title__icontains=q) | Q(content_md__icontains=q))
     out = []
     for n in qs[:GLOBAL_LIMIT]:
@@ -495,11 +501,13 @@ def search(request):
     """
     q = (request.GET.get('q') or '').strip()
     raw = (request.GET.get('scopes') or '').strip()
-    if not raw or raw == 'all':
+    if not raw:
+        scopes = ['kb', 'office']
+    elif raw == 'all':
         scopes = list(GLOBAL_SCOPE_ORDER)
     else:
         wanted = {s for s in raw.split(',') if s in GLOBAL_SCOPES}   # 白名单过滤
-        scopes = [s for s in GLOBAL_SCOPE_ORDER if s in wanted] or list(GLOBAL_SCOPE_ORDER)
+        scopes = [s for s in GLOBAL_SCOPE_ORDER if s in wanted] or ['kb', 'office']
     groups, total = [], 0
     if q:
         groups, total = _global_search(q, scopes)
@@ -696,7 +704,6 @@ def report_view(request, pk):
     })
 
 
-@csrf_exempt
 def api_record_update(request):
     """内联编辑工作记录：field ∈ {date, status, category}。"""
     if request.method != 'POST':
@@ -738,7 +745,6 @@ def api_record_update(request):
     })
 
 
-@csrf_exempt
 def api_record_delete(request):
     """删除一条工作记录。"""
     if request.method != 'POST':
@@ -754,7 +760,6 @@ def api_record_delete(request):
     return JsonResponse({'ok': True})
 
 
-@csrf_exempt
 def api_archive_day(request):
     """把某一天的工作记录归档到「工作记录」归档分类（日期卡片上的「归档」按钮调用）。
 
@@ -774,7 +779,7 @@ def api_archive_day(request):
     except (ValueError, TypeError):
         return JsonResponse({'ok': False, 'error': 'bad_date'})
 
-    qs = WorkRecord.objects.filter(date=day).exclude(category=ARCHIVE_CAT)
+    qs = WorkRecord.objects.filter(date=day, is_archived=False)
     # 归档门槛：该日全部记录状态均为「已完成」才放行；否则阻断并回传明细供前端提示。
     # 状态为空视为未完成（三态之外的自定义/未设置状态不允许静默归档）。
     incomplete = qs.exclude(status='已完成')
@@ -786,13 +791,12 @@ def api_archive_day(request):
             'samples': ['%s（%s）' % (r.content[:20], r.status or '未设置')
                         for r in incomplete.order_by('pk')[:3]],
         })
-    moved = qs.update(category=ARCHIVE_CAT)
+    moved = qs.update(is_archived=True, archived_at=timezone.now())
     if moved:
         log_operation('office', 'archive_day', detail='%s x%d' % (day, moved))
     return JsonResponse({'ok': True, 'date': day.strftime('%Y-%m-%d'), 'moved': moved})
 
 
-@csrf_exempt
 def api_search(request):
     """供前端异步调用的全网检索。"""
     if request.method != 'POST':
@@ -834,16 +838,19 @@ def workfile_open(request, pk):
     """只读调出文件副本：严格限制路径位于工作文件目录内，防越权访问。"""
     wf = get_object_or_404(WorkFileIndex, pk=pk)
     root = os.path.realpath(_workfile_upload_dir())
-    real = os.path.realpath(wf.original_path)
+    from core.storage import media_path, inside
+    if wf.original_path.startswith('media:'):
+        real = str(media_path(wf.original_path[6:]))
+        root = os.path.realpath(settings.MEDIA_ROOT)
+    else:
+        real = os.path.realpath(wf.original_path)
     sep = os.sep
     allowed = (real == root or real.startswith(root + sep))
     if not allowed or not os.path.isfile(real):
         return HttpResponseForbidden('无权访问该文件或文件不存在。')
     mime, _ = mimetypes.guess_type(real)
-    resp = FileResponse(open(real, 'rb'), filename=os.path.basename(real))
-    if mime:
-        resp['Content-Type'] = mime
-    resp['Content-Disposition'] = 'inline; filename="%s"' % os.path.basename(real)
+    resp = FileResponse(open(real, 'rb'), as_attachment=True, filename=wf.title + '.' + wf.ext)
+    resp['Content-Security-Policy'] = "sandbox; default-src 'none'"
     return resp
 
 

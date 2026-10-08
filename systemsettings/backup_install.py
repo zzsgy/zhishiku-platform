@@ -31,7 +31,7 @@ rem  ASCII-only + CRLF on purpose. cmd.exe mis-parses LF-only or
 rem  non-ASCII batch files, so keep it that way when editing.
 rem
 rem  Steps:
-rem    1. locate a USABLE Python 3.10+    (validated, not just version-checked)
+rem    1. locate a USABLE Python 3.11 / 3.12    (validated, not just version-checked)
 rem    2. create the virtual environment   (XiTong\venv)
 rem    3. install dependencies             (XiTong\requirements.txt)
 rem    4. prepare the database             (migrate + defaults)
@@ -54,6 +54,9 @@ set "DATA=%PKG%\ZhiShi"
 set "VENV=%APP%\venv"
 set "PYEXE=%VENV%\Scripts\python.exe"
 set "REQ=%APP%\requirements.txt"
+set "HASHOPT="
+if exist "%APP%\requirements.lock" set "HASHOPT=--require-hashes"
+if exist "%APP%\requirements.lock" set "REQ=%APP%\requirements.lock"
 set "REQOPT=%APP%\requirements-optional.txt"
 set "PY="
 set "WITHOPT=0"
@@ -73,18 +76,18 @@ if not exist "%APP%\manage.py" goto :no_package
 if not exist "%REQ%" goto :no_requirements
 
 rem ---------- 1. locate a suitable Python ----------
-rem  A candidate is accepted only when it is 3.10+ AND can really create
+rem  A candidate is accepted only when it is 3.11 or 3.12 AND can really create
 rem  virtual environments (venv + ensurepip importable). Trimmed or
 rem  relocated installs exist in the wild: a python.exe on PATH whose Lib
 rem  folder is not on sys.path reports a perfectly good version yet dies at
 rem  "python -m venv" with "No module named venv". So validate, and fall
 rem  through to the next candidate instead of failing the whole install.
-rem  Known-good versions are tried first (3.13 down to 3.10) because the
+rem  Known-good versions are tried first (3.12 then 3.11) because the
 rem  newest CPython may not have wheels for every pinned dependency yet.
-echo [1/5] Looking for Python 3.10 or newer ...
+echo [1/5] Looking for Python 3.11 or 3.12 ...
 if defined ZHISHIKU_PYTHON call :probe_exe "%ZHISHIKU_PYTHON%"
 if defined ZHISHIKU_PYTHON if not defined PY echo       [warn] ZHISHIKU_PYTHON is not usable - trying other interpreters
-for %%V in (3.13 3.12 3.11 3.10) do if not defined PY call :probe_launcher %%V
+for %%V in (3.12 3.11) do if not defined PY call :probe_launcher %%V
 if not defined PY call :probe_launcher 3
 if not defined PY call :probe_cmd python
 for %%D in ("%LOCALAPPDATA%\Programs\Python\Python313" "%LOCALAPPDATA%\Programs\Python\Python312" "%LOCALAPPDATA%\Programs\Python\Python311" "%LOCALAPPDATA%\Programs\Python\Python310" "C:\Python313" "C:\Python312" "C:\Python311" "C:\Python310") do if not defined PY call :probe_exe "%%~D\python.exe"
@@ -104,18 +107,18 @@ goto :venv_done
 echo       already present, reusing it
 :venv_done
 if not exist "%PYEXE%" goto :venv_fail
-"%PYEXE%" -m pip install --upgrade pip --quiet --disable-pip-version-check >nul 2>&1
+"%PYEXE%" -X utf8 -m pip install --upgrade pip --quiet --disable-pip-version-check >nul 2>&1
 
 rem ---------- 3. dependencies ----------
 echo.
 echo [3/5] Installing dependencies - this may take a few minutes ...
 set "PIPOK=1"
-if defined MIRROR "%PYEXE%" -m pip install -r "%REQ%" %MIRROR% --disable-pip-version-check
+if defined MIRROR "%PYEXE%" -X utf8 -m pip install %HASHOPT% -r "%REQ%" %MIRROR% --disable-pip-version-check
 if defined MIRROR if errorlevel 1 set "PIPOK=0"
 if not defined MIRROR set "PIPOK=0"
 if "%PIPOK%"=="0" (
   echo       mirror skipped or failed, using the default PyPI index ...
-  "%PYEXE%" -m pip install -r "%REQ%" --disable-pip-version-check
+  "%PYEXE%" -X utf8 -m pip install %HASHOPT% -r "%REQ%" --disable-pip-version-check
 )
 if errorlevel 1 goto :pip_fail
 
@@ -124,7 +127,7 @@ if exist "%REQOPT%" echo       optional extras NOT installed - see the guide if 
 goto :db
 :opt_deps
 echo       installing optional extras - video / OCR / speech ...
-"%PYEXE%" -m pip install -r "%REQOPT%" --disable-pip-version-check
+"%PYEXE%" -X utf8 -m pip install -r "%REQOPT%" --disable-pip-version-check
 if errorlevel 1 echo       [warn] optional extras failed - the platform still runs without them
 
 rem ---------- 4. database ----------
@@ -137,9 +140,13 @@ goto :db_migrate
 :db_keep
 echo       existing database found - keeping all of its records
 :db_migrate
-"%PYEXE%" "%APP%\manage.py" migrate --noinput
+"%PYEXE%" -X utf8 "%APP%\manage.py" migrate --noinput
 if errorlevel 1 goto :migrate_fail
-"%PYEXE%" "%APP%\init_config.py"
+"%PYEXE%" -X utf8 "%APP%\init_config.py"
+if errorlevel 1 goto :migrate_fail
+
+rem Authentication is mandatory; no default password is shipped.
+"%PYEXE%" -X utf8 "%APP%\manage.py" bootstrap_account
 if errorlevel 1 goto :migrate_fail
 
 rem ---------- 5. summary ----------
@@ -177,9 +184,9 @@ pause
 exit /b 1
 
 :no_python
-echo [ERROR] No usable Python 3.10 or newer was found on this computer.
+echo [ERROR] No usable Python 3.11 or 3.12 was found on this computer.
 echo.
-echo   "Usable" means version 3.10+ AND the venv module is present.
+echo   "Usable" means version 3.11 or 3.12 AND the venv module is present.
 echo   Some trimmed / relocated installs are missing it, so a python.exe
 echo   that answers "python -V" can still be rejected here.
 echo.
@@ -227,7 +234,7 @@ rem ============================================================
 rem %~1 = full path to a python.exe
 if "%~1"=="" exit /b 0
 if not exist "%~1" exit /b 0
-"%~1" -c "import sys,venv,ensurepip;sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1
+"%~1" -c "import sys,venv,ensurepip;sys.exit(0 if (3,11)<=sys.version_info[:2]<(3,13) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 0
 set "PY=%~1"
 exit /b 0
@@ -385,235 +392,70 @@ exit /b %errorlevel%
 # 知识恢复脚本：恢复知识.cmd
 # ---------------------------------------------------------------------------
 _RESTORE_CMD = r'''@echo off
-rem ============================================================
-rem  ZhiShiKu - restore knowledge data from this backup package
-rem
-rem  Copies the knowledge folders back into a platform installation.
-rem  Nothing is deleted: files that already exist are overwritten only
-rem  when they have the same name, everything else is left untouched.
-rem
-rem  ASCII-only + CRLF on purpose.
-rem ============================================================
-setlocal EnableExtensions
-cd /d "%~dp0"
-title ZhiShiKu - Restore knowledge data
-
-set "HERE=%~dp0"
-if "%HERE:~-1%"=="\" set "HERE=%HERE:~0,-1%"
-set "TARGET="
-set "LOADJSON=0"
-if /i "%~1"=="--load-json" set "LOADJSON=1"
-
-echo ============================================================
-echo   ZhiShiKu - restore knowledge data
-echo ============================================================
-echo   backup  : %HERE%
-echo.
-
-rem --- auto-detect: bundle sitting right next to (or inside) the platform ---
-if exist "%HERE%\..\XiTong\manage.py" for %%I in ("%HERE%\..") do set "TARGET=%%~fI"
-if not defined TARGET if exist "%HERE%\XiTong\manage.py" for %%I in ("%HERE%") do set "TARGET=%%~fI"
-
-if defined TARGET goto :have_target
-echo   Where should the data go? Enter the folder that CONTAINS the
-echo   platform - that is, the parent of the XiTong folder.
-echo   Example: C:\ZSK
-echo.
-set /p "TARGET=Target folder: "
-if not defined TARGET goto :cancel
-
-:have_target
-if not exist "%TARGET%\XiTong\manage.py" goto :bad_target
-echo   target  : %TARGET%
-echo.
-echo   About to copy:
-echo     ZhiShi   ->  %TARGET%\ZhiShi
-echo     media    ->  %TARGET%\XiTong\media
-echo.
-echo   Press Ctrl+C to abort, or
-pause
-
-if not exist "%HERE%\ZhiShi" goto :skip_zhishi
-echo [..] copying knowledge folders ...
-xcopy "%HERE%\ZhiShi" "%TARGET%\ZhiShi" /E /I /Y /Q
-if errorlevel 1 echo       [warn] some knowledge files could not be copied
-:skip_zhishi
-
-if not exist "%HERE%\media" goto :skip_media
-echo [..] copying uploaded media ...
-xcopy "%HERE%\media" "%TARGET%\XiTong\media" /E /I /Y /Q
-if errorlevel 1 echo       [warn] some media files could not be copied
-:skip_media
-
-if "%LOADJSON%"=="1" goto :load_json
-echo.
-echo   File restore finished.
-echo   The database records (notes, tags, links, reading progress ...) live in
-echo   database\*.json. Importing them is only needed when the platform
-echo   database itself was lost. Re-run with --load-json to do that.
-goto :done
-
-:load_json
-echo.
-echo [..] importing database records from the JSON export ...
-set "JSONFILE="
-for %%F in ("%HERE%\database\*.json") do set "JSONFILE=%%~fF"
-if not defined JSONFILE goto :no_json
-if not exist "%TARGET%\XiTong\venv\Scripts\python.exe" goto :no_venv
-"%TARGET%\XiTong\venv\Scripts\python.exe" "%TARGET%\XiTong\manage.py" loaddata "%JSONFILE%"
-if errorlevel 1 echo       [warn] importing database records failed
-if not errorlevel 1 echo       imported %JSONFILE%
-goto :done
-
-:no_json
-echo       [warn] database\*.json not found in this package - skipped
-goto :done
-
-:no_venv
-echo       [warn] the platform virtual environment is missing:
-echo              %TARGET%\XiTong\venv\Scripts\python.exe
-echo              Install the platform first, then run this script again.
-goto :done
-
-:done
-echo.
-echo ============================================================
-echo   KNOWLEDGE RESTORE FINISHED
-echo ============================================================
-echo   Start the platform and check the knowledge sections
-echo   (knowledge base / WiKI / bookshelf / office platform).
-echo ============================================================
-echo.
-pause
-exit /b 0
-
-:bad_target
-echo [ERROR] No platform found under:
-echo         %TARGET%\XiTong\manage.py
-echo         Please point at the folder that contains the XiTong folder.
-echo.
-pause
-exit /b 1
-
-:cancel
-echo Aborted - nothing was changed.
-pause
+rem Restore only through the verified command, into a NEW directory.
+echo Run this command from an installed platform's virtual environment:
+echo   python -X utf8 manage.py restore_backup "BACKUP.zip" --destination "NEW_FOLDER"
+echo The original ZIP is required. Existing destinations are rejected.
+echo Check the restored data before switching installations.
 exit /b 1
 '''
+
 
 
 # ---------------------------------------------------------------------------
 # 中文安装说明
 # ---------------------------------------------------------------------------
 def _install_guide(pkg):
-    return f'''# 安装说明 · {pkg}
+    return '''# 安装与恢复说明 · {pkg}
 
-这个包是**空运行平台**或**迁移整包**，双击根目录下的「一键安装.cmd」即可完成安装。
+本包面向个人本机 Windows 使用。本次实际验证环境为 Windows、Python 3.11 与 3.12；其它系统与可选视频/OCR 工具未完成发行验收。
 
-## 一、安装前请确认
+## 先区分用途
 
-| 项目 | 要求 |
-|---|---|
-| 操作系统 | Windows 10 / 11（64 位） |
-| Python | **3.10 或更高**（推荐 3.11 ~ 3.13） |
-| 网络 | 安装依赖需要联网（脚本会用清华镜像，失败时自动回退官方源） |
-| 磁盘 | 至少预留 3 GB（依赖环境约 1.2 GB；勾选可选组件则需 5 GB+） |
+| 包类型 | 正文与原件 | 数据库/账号 | 用法 |
+|---|---|---|---|
+| 系统包 | 空数据骨架 | 建新库、创建新管理员 | 完整解压后安装 |
+| 知识包 | 原件与知识导出 | 知识 fixture，不含原账号 | 从已安装的可信平台执行隔离恢复 |
+| 迁移包 | 原件与知识导出 | 一致快照、保留账号、移除 API 凭据 | 优先从可信平台执行隔离恢复后再安装 |
 
-> 若未安装 Python：到 <https://www.python.org/downloads/windows/> 下载安装，
-> 安装时**务必勾选 “Add python.exe to PATH”**。
+原件与正文可能含个人资料；脱敏 API 配置不代表备份没有敏感内容。本包未加密，也没有数字签名，只对文件完整性做哈希校验。仅恢复自己可信的包。
 
-## 二、安装（三步）
+## 新平台安装
 
-1. **解压**：把整个压缩包解压到一个**没有中文和空格**的目录，例如 `D:\\Zhishiku`。
-   （不要直接在压缩包内运行脚本。）
-2. **双击**：进入解压后的文件夹，双击「**一键安装.cmd**」。
-3. **等待**：脚本会自动检测 Python → 创建虚拟环境 → 安装依赖 → 建库初始化，
-   全程约 3 ~ 10 分钟。看到 `INSTALLATION COMPLETE` 即安装成功。
+1. 完整解压，保留 XiTong 与 ZhiShi 的同级结构，不在 ZIP 内启动，也不向旧平台目录覆盖解压。中文与空格路径已完成核心恢复测试；建议避免过深目录。
+2. 安装完整的 Python 3.11 或 3.12（含 venv 与 ensurepip），双击「一键安装.cmd」。可通过 ZHISHIKU_PYTHON 指定解释器。
+3. 安装器建立独立虚拟环境，优先使用带哈希的 requirements.lock，执行数据库迁移和默认项初始化。初始化保留已有配置，没有出厂默认密码；没有管理员时会要求创建。
+4. 双击「启动平台.cmd」；登录后使用。启动器启动本机 Waitress 服务及独立任务 worker，健康检查通过后才打开浏览器。
 
-安装完成后，双击「**启动平台.cmd**」启动，浏览器会自动打开
-<http://127.0.0.1:8000/>。
+安装需要联网下载依赖，默认尝试清华镜像；ZHISHIKU_NO_MIRROR=1 可使用官方 PyPI。升级依赖前应审计新锁文件，勿把随意的 pip upgrade 当作发行流程。
 
-## 三、安装脚本做了什么
+端口被其它进程占用时启动器报错，不会自动结束它。可执行 XiTong/launch-platform.ps1 -Port 8010。停止只处理本平台记录且身份核对通过的进程。运行日志位于 XiTong/.runtime 和 XiTong/logs。
 
-| 步骤 | 动作 | 说明 |
-|---|---|---|
-| 1 | 查找 Python | 按 `3.13 → 3.12 → 3.11 → 3.10 → 任意版本 → python → 常见安装路径` 的顺序探测。每个候选都会校验「**版本 ≥ 3.10 且自带 venv 模块**」，不可用就自动跳到下一个；可用环境变量 `ZHISHIKU_PYTHON` 直接指定 |
-| 2 | 创建虚拟环境 | 建立在 `XiTong\\venv`，与系统 Python 隔离，不污染全局 |
-| 3 | 安装依赖 | 按 `XiTong\\requirements.txt` 安装；先用清华镜像，失败自动回退官方源 |
-| 4 | 准备数据库 | 执行 `migrate` 建表；若包内已带 `db.sqlite3`（迁移包）则原样保留 |
-| 5 | 初始化 | 写入默认分库（运行档案库 / 知识库）与默认设置 |
+## 迁移与知识恢复
 
-### 可选组件（视频转图文 / OCR / 语音转写）
-
-默认**不装**（含 PyTorch，体积数 GB）。需要时执行：
+保留原始 ZIP。在已安装的可信版本目录执行：
 
 ```
-install\\install.cmd --full
+venv/Scripts/python.exe -X utf8 manage.py verify_backup "BACKUP.zip"
+venv/Scripts/python.exe -X utf8 manage.py restore_backup "BACKUP.zip" --destination "D:/新平台目录"
 ```
 
-或用命令行安装：`XiTong\\venv\\Scripts\\pip install -r XiTong\\requirements-optional.txt`
+目标必须尚不存在。恢复先核对清单、哈希和路径，在临时目录迁移/导入并检查数据库完整性与外键，通过后才发布目标目录。遇到错误即停止；旧格式备份需保留原件并单独核对，不直接套用新恢复器。
 
-> OCR 还需要另外安装 Tesseract-OCR 并加入 PATH。
+打开新目录中的「恢复验证.json」，处理外部工作目录提示。当前恢复重定位已知原件/书籍/报告等路径；外部磁盘目录不猜测搬迁位置。创建新的虚拟环境，重配 AI/Gitee 凭据；知识/系统包需创建管理员，迁移包保留原账号。确认书籍、原件、知识、报告等样例可用后，再手工切换到新平台。
 
-## 四、包内结构
+## 可选工具
 
-```
-{pkg}/
-├─ XiTong/            平台程序（源码、模板、静态资源、依赖清单、启动脚本）
-│   ├─ manage.py  kb/  core/  11 个功能模块 …
-│   ├─ bin/ffmpeg.exe 视频转图文所需的外部工具
-│   └─ media/         上传媒体目录
-├─ ZhiShi/            知识库目录（与 XiTong 同级，平台自动定位）
-├─ install/
-│   ├─ install.cmd      一键安装脚本
-│   ├─ start-platform.cmd 启动脚本
-│   └─ stats.py           安装后统计
-├─ 一键安装.cmd         ← 双击这个
-├─ 启动平台.cmd         ← 装完双击这个
-├─ 备份清单.json        本次备份的范围与内容清单
-├─ 备份说明.md          本次备份的范围说明
-└─ VERSION.txt
-```
+视频、OCR、语音转写默认不安装。install/install.cmd --full 会请求安装 requirements-optional.txt，并可能下载数 GB 的环境/模型。该清单尚未锁定或完成本次漏洞审计。还需单独配置 FFmpeg、Tesseract、Whisper；不随源码分发外部二进制。缺少工具应查看原件与任务诊断。
 
-## 五、常见问题
+## 数据与权限
 
-**Q：双击后窗口一闪而过？**
-在文件夹空白处右键 →「在终端中打开」，手动执行 `install\\install.cmd`，
-就能看到完整报错信息。
+默认 XiTong/db.sqlite3 保存账号与业务记录，XiTong/media 保存上传原件，同级 ZhiShi 保存可重建正文导出及办公产物，同级「备份输出」保存备份。可用 ZHISHIKU_DB_PATH、ZHISHIKU_MEDIA_ROOT、ZHISHIKU_DATA_ROOT、ZHISHIKU_BACKUP_ROOT 覆盖。
 
-**Q：提示找不到 manage.py？**
-没有解压完整，或仍在压缩包内运行。请先完整解压到本地目录再执行。
+业务页面必须登录，设置与备份需要管理员。云端 AI 资料外发默认关闭；需要时由管理员明确开启。默认不会自动把失败请求转给其它 AI 服务。本机无密钥模型须显式配置为本机服务。
 
-**Q：提示找不到可用的 Python？**
-两种可能：① 本机没装 Python；② 装的是**精简版或被搬迁过的** Python，缺少 `venv` 模块
-（症状：`python -V` 一切正常，但 `python -m venv xxx` 报 `No module named venv`）。
-到 python.org 装一个**完整版**并勾选 “Add python.exe to PATH” 即可。机器上有多个 Python 时，
-可用 `set ZHISHIKU_PYTHON=C:\\path\\to\\python.exe` 精确指定。
-
-**Q：依赖安装失败？**
-多为网络问题。设置环境变量 `ZHISHIKU_NO_MIRROR=1` 后重试（改用官方源），
-或先配置好可用的 pip 镜像。
-
-**Q：端口 8000 被占用？**
-启动脚本会自动释放旧的监听进程；若仍冲突，编辑 `XiTong\\start-zhishiku.cmd`
-中的 `PORT` 值即可。
-
-**Q：想换一个知识数据目录？**
-设置环境变量 `ZHISHIKU_DATA_ROOT` 指向目标目录，例如
-`set ZHISHIKU_DATA_ROOT=D:\\MyZhishi`，再启动平台。
-不设置时默认使用平台程序同级的 `ZhiShi` 目录。
-
-**Q：解压后中文文件名乱码？**
-Windows 自带解压对 UTF-8 中文名支持不佳，请改用 **7-Zip** 或 **WinRAR** 解压。
-
-## 六、备份包的三种类型（对照）
-
-| 备份类型 | 程序代码 | 依赖环境 | 知识资料 | 数据库 | 用途 |
-|---|---|---|---|---|---|
-| 知识备份 | ✗ | ✗ | ✅ 全部 | 导出为 JSON | 只留知识，随时找回 |
-| 系统备份 | ✅ 全部 | ✅ 脚本重建 | ✗ 零知识 | 新建空库 | 发给他人装空平台 |
-| 迁移备份 | ✅ 全部 | ✅ 脚本重建 | ✅ 全部 | ✅ 原文件 | 换电脑整体搬迁 |
-'''
+当前不是现成的多人隔离/跨电脑同步平台。网络部署需要独立密钥、明确主机和 HTTPS 等额外配置，详见 XiTong/docs/OPERATIONS.md。
+'''.replace('{pkg}', pkg)
 
 
 def generated_files(kind, pkg_name=''):
@@ -647,7 +489,7 @@ def _version_txt(kind, pkg_name):
         'created at   : %s' % datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         '',
         'Platform stack: Django 5.2 + SQLite + Bootstrap 5 / ECharts / D3',
-        'Runtime need  : Python 3.10+  (see install/install.cmd)',
+        'Runtime need  : Python 3.11 / 3.12  (see install/install.cmd)',
         '',
         'Entry points:',
         '  install/install.cmd          one-click installer',

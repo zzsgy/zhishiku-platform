@@ -7,6 +7,39 @@ items, operation logs and system configuration.
 from django.db import models
 
 
+class Asset(models.Model):
+    original_name = models.CharField(max_length=256)
+    storage_path = models.CharField(max_length=512, unique=True)
+    sha256 = models.CharField(max_length=64, db_index=True)
+    size = models.PositiveBigIntegerField()
+    created = models.DateTimeField(auto_now_add=True)
+
+
+class Job(models.Model):
+    kind = models.CharField(max_length=32)
+    payload = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, default='pending', db_index=True)
+    active_key = models.CharField(max_length=256, null=True, unique=True)
+    owner = models.CharField(max_length=32, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    lease_until = models.DateTimeField(null=True)
+    error = models.TextField(blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+    finished = models.DateTimeField(null=True)
+
+
+class ParsedDocument(models.Model):
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+    parser_version = models.CharField(max_length=64)
+    content_md = models.TextField()
+    metadata = models.JSONField(default=dict)
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['asset', 'parser_version'], name='unique_parsed_asset')]
+
+
 class KnowledgeBase(models.Model):
     """逻辑分库：运行档案库 / 知识库。"""
     KIND_CHOICES = [
@@ -62,6 +95,12 @@ class KnowledgeNode(models.Model):
     ai_generated = models.BooleanField('AI 生成', default=False)
     created = models.DateTimeField('创建时间', auto_now_add=True)
     updated = models.DateTimeField('更新时间', auto_now=True)
+    asset = models.ForeignKey(Asset, null=True, blank=True, on_delete=models.SET_NULL)
+    collection = models.OneToOneField('CollectionItem', null=True, blank=True, on_delete=models.SET_NULL)
+    version = models.PositiveIntegerField(default=1)
+    export_path = models.CharField(max_length=512, blank=True)
+    export_status = models.CharField(max_length=16, default='pending')
+    export_error = models.TextField(blank=True)
 
     class Meta:
         verbose_name = '知识节点'
@@ -70,6 +109,61 @@ class KnowledgeNode(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        from django.db import transaction
+        self.full_clean(validate_unique=False, validate_constraints=False)
+        with transaction.atomic():
+            previous = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+            if previous and self.version != previous.version:
+                from .revisions import VersionConflict
+                raise VersionConflict('此知识已被其它窗口修改，请刷新并核对版本')
+            fields = ('title', 'content_md', 'category', 'tags', 'node_type', 'parent_id', 'status')
+            changed = previous and any(getattr(previous, f) != getattr(self, f) for f in fields)
+            if changed:
+                NodeRevision.objects.get_or_create(node=self, version=previous.version,
+                    defaults={'snapshot': {f: getattr(previous, f) for f in fields}})
+                self.version = previous.version + 1
+                self.export_status = 'pending'
+                if kwargs.get('update_fields'):
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'version', 'export_status'}
+            super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.parent_id:
+            current = self.parent
+            seen = {self.pk} if self.pk else set()
+            while current:
+                if current.pk in seen or current.base_id != self.base_id:
+                    raise ValidationError('父节点必须位于同一知识库，且不能形成循环')
+                seen.add(current.pk)
+                current = current.parent
+
+
+class NodeRevision(models.Model):
+    node = models.ForeignKey(KnowledgeNode, related_name='revisions', on_delete=models.CASCADE)
+    version = models.PositiveIntegerField()
+    snapshot = models.JSONField(default=dict)
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['node', 'version'], name='unique_node_revision')]
+
+
+class DeletedNode(models.Model):
+    original_id = models.BigIntegerField()
+    snapshot = models.JSONField()
+    created = models.DateTimeField(auto_now_add=True)
+
+
+class NodeProposal(models.Model):
+    node = models.ForeignKey(KnowledgeNode, on_delete=models.CASCADE)
+    base_version = models.PositiveIntegerField()
+    proposed = models.JSONField()
+    status = models.CharField(max_length=16, default='pending')
+    created = models.DateTimeField(auto_now_add=True)
 
 
 class NodeNote(models.Model):
@@ -100,6 +194,7 @@ class Edge(models.Model):
     class Meta:
         verbose_name = '关系'
         verbose_name_plural = '关系'
+        constraints = [models.UniqueConstraint(fields=['source', 'target', 'kind'], name='unique_edge')]
 
     def __str__(self):
         return f'{self.source} → {self.target}'
@@ -124,6 +219,8 @@ class CollectionItem(models.Model):
     note = models.TextField('结果说明', blank=True)
     base = models.ForeignKey(KnowledgeBase, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='归入库')
     created = models.DateTimeField('创建时间', auto_now_add=True)
+    asset = models.ForeignKey(Asset, null=True, blank=True, on_delete=models.SET_NULL)
+    original_name = models.CharField(max_length=256, blank=True)
 
     class Meta:
         verbose_name = '收集项'

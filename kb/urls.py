@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path
+from django.urls import include
+from core import views as core_views
 from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
@@ -7,6 +9,7 @@ from django.conf.urls.static import static
 from dashboard import views as dashboard_views
 from starmap import views as starmap_views
 from wiki import views as wiki_views
+from wiki import revisions as revision_views
 from bookshelf import views as bookshelf_views
 from knowledgebase import views as kb_views
 from inspiration import views as inspiration_views
@@ -15,16 +18,23 @@ from office import views as office_views
 from collection import views as collection_views
 from runarchive import views as runarchive_views
 from systemsettings import views as settings_views
+from systemsettings import diagnostics
 
 urlpatterns = [
+    path('accounts/', include('django.contrib.auth.urls')),
+    path('health/', core_views.health, name='health'),
+    path('media/<path:path>', core_views.media, name='protected_media'),
     path('', dashboard_views.index, name='home'),
     path('favicon.ico', RedirectView.as_view(url='/static/favicon.svg', permanent=False)),
     path('dashboard/', dashboard_views.index, name='dashboard'),
     path('admin/', admin.site.urls),
     path('starmap/', starmap_views.index, name='starmap'),
     path('wiki/', wiki_views.index, name='wiki'),
+    path('wiki/recycle/', revision_views.recycle_bin, name='wiki_recycle'),
     path('wiki/node/<int:pk>/', wiki_views.node_view, name='wiki_node'),
     path('wiki/node/<int:pk>/edit/', wiki_views.node_edit, name='wiki_node_edit'),
+    path('wiki/node/<int:pk>/history/', revision_views.history, name='wiki_history'),
+    path('wiki/proposal/<int:pk>/', revision_views.review, name='wiki_review'),
     path('wiki/create/', wiki_views.node_create, name='wiki_create'),
     path('wiki/precipitation/', wiki_views.precipitation, name='wiki_precipitation'),
     path('wiki/api/extract/', wiki_views.api_extract, name='wiki_api_extract'),
@@ -94,6 +104,7 @@ urlpatterns = [
     path('runarchive/export/csv/', runarchive_views.export_csv, name='runarchive_export_csv'),
     path('runarchive/export/md/', runarchive_views.export_md, name='runarchive_export_md'),
     path('settings/', settings_views.index, name='settings'),
+    path('settings/diagnostics/', diagnostics.index, name='diagnostics'),
     path('settings/save/', settings_views.save_settings, name='settings_save'),
     path('api/providers/', settings_views.api_providers, name='api_providers'),
     path('settings/ai/save/', settings_views.ai_save, name='ai_save'),
@@ -111,6 +122,3 @@ urlpatterns = [
     path('settings/backup/download/<int:pk>/', settings_views.backup_download, name='backup_download'),
     path('settings/backup/delete/<int:pk>/', settings_views.backup_delete, name='backup_delete'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

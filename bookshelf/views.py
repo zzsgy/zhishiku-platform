@@ -3,6 +3,9 @@
 书籍元信息同步写入知识库 03_知识库/06_书籍；正文支持 txt/md/各类文本/PDF/DOCX/XLSX/HTML 及网页链接，可在阅读器内直接阅读并划句。
 """
 import json
+from html import escape
+from uuid import uuid4
+from core.storage import save_upload, media_path, media_url, atomic_write
 import os
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
@@ -12,7 +15,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Q
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Book, ReadingNote, GoldenSentence
 from core.services import log_operation, render_markdown, zhi_shi_path, ensure_dir, sanitize_filename
@@ -32,7 +34,7 @@ def _export_book(book):
         f'- 状态：{book.get_status_display()}\n'
     )
     try:
-        (d / f'{sanitize_filename(book.title)}.md').write_text(content, encoding='utf-8')
+        (d / f'book-{book.pk}.md').write_text(content, encoding='utf-8')
     except Exception:
         pass
 
@@ -69,15 +71,15 @@ def add(request):
         total = 0
     file_path = ''
     source_url = ''
+    asset = None
     if f:
         # 本地文件：支持各类文本 / PDF / DOCX / XLSX / 网页 等
-        d = settings.MEDIA_ROOT / 'books'
-        d.mkdir(parents=True, exist_ok=True)
-        dest = d / f.name
-        with open(dest, 'wb') as out:
-            for chunk in f.chunks():
-                out.write(chunk)
-        file_path = str(dest)
+        try:
+            dest, asset = save_upload(f)
+        except (ValueError, OSError) as exc:
+            messages.error(request, str(exc))
+            return redirect('/bookshelf/?err=file')
+        file_path = dest.relative_to(settings.MEDIA_ROOT.resolve()).as_posix()
     elif url:
         # 网页链接：抓取正文转 Markdown 落盘，失败则归档至链接库
         source_url = url
@@ -87,9 +89,9 @@ def add(request):
             d = settings.MEDIA_ROOT / 'books'
             d.mkdir(parents=True, exist_ok=True)
             safe = sanitize_filename(title or t)[:80]
-            md_path = d / f'{safe}.md'
-            md_path.write_text(md, encoding='utf-8')
-            file_path = str(md_path)
+            md_path = d / f'{uuid4().hex}.md'
+            atomic_write(md_path, md)
+            file_path = md_path.relative_to(settings.MEDIA_ROOT.resolve()).as_posix()
             title = title or t
         except Exception as e:
             try:
@@ -102,70 +104,29 @@ def add(request):
     book = Book.objects.create(
         title=title or (f.name if f else (url if url else '未命名书籍')),
         author=author, category=category, total_pages=total,
-        file_path=file_path, source_url=source_url)
+        file_path=file_path, source_url=source_url, asset=asset)
     _export_book(book)
     log_operation('bookshelf', 'add', detail=book.title)
     return redirect('/bookshelf/')
 
 
-# 可作为纯文本直接阅读的扩展名（其余交给专用解析器）
-TEXT_EXTS = ('.txt', '.text', '.csv', '.tsv', '.json', '.log', '.xml', '.yaml',
-             '.yml', '.py', '.js', '.css', '.sql', '.ini', '.cfg', '.rtf',
-             '.html', '.htm')
-
-
 def _read_book_body(book):
-    """根据文件类型读取书籍正文，返回渲染后的 HTML；不支持或读取失败时返回 ''。"""
-    fp = book.file_path
-    if not fp or not os.path.exists(fp):
-        return ''
-    p = fp.lower()
+    """Use the shared parser and preserve diagnostics instead of a lossy fallback."""
     try:
-        if p.endswith(('.md', '.markdown')):
-            raw = open(fp, encoding='utf-8', errors='ignore').read()
-            return render_markdown(raw)
-        if p.endswith(TEXT_EXTS):
-            raw = open(fp, encoding='utf-8', errors='ignore').read()
-            if p.endswith(('.html', '.htm')):
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(raw, 'html.parser')
-                for tag in soup(['script', 'style']):
-                    tag.decompose()
-                raw = soup.get_text('\n', strip=True)
-            return f'<pre class="kb-prose">{raw}</pre>'
-        if p.endswith('.pdf'):
-            import PyPDF2
-            reader = PyPDF2.PdfReader(fp)
-            if reader.is_encrypted:
-                try:
-                    reader.decrypt('')  # 空密码解密（仅限作者未设打开密码的 PDF）
-                except Exception:
-                    return ('<p class="text-muted">该 PDF 受密码保护，无法在线提取正文，'
-                            '请用本地阅读器打开。</p>')
-            text = '\n\n'.join((pg.extract_text() or '') for pg in reader.pages)
-            if not text.strip():
-                return ('<p class="text-muted">该 PDF 未提取到文本：可能是扫描件/图片型 PDF'
-                        '（无文字层），暂不支持 OCR，请用本地阅读器打开。</p>')
-            return f'<pre class="kb-prose">{text}</pre>'
-        if p.endswith('.docx'):
-            from docx import Document
-            doc = Document(fp)
-            lines = [para.text for para in doc.paragraphs if para.text.strip()]
-            content = '\n'.join(lines)
-            return f'<pre class="kb-prose">{content}</pre>'
-        if p.endswith('.xlsx'):
-            import openpyxl
-            wb = openpyxl.load_workbook(fp, read_only=True, data_only=True)
-            out = []
-            for ws in wb.worksheets:
-                out.append(f'# {ws.title}')
-                for row in ws.iter_rows(values_only=True):
-                    out.append('\t'.join('' if c is None else str(c) for c in row))
-            content = '\n'.join(out)
-            return f'<pre class="kb-prose">{content}</pre>'
-    except Exception as e:
-        logger.error('read book body failed: %s', e)
-    return ''
+        fp = media_path(book.file_path) if book.file_path else None
+        if not fp or not fp.is_file():
+            return '<p role="status">原件暂不可用，请核对文件目录。</p>'
+        from core.parsers import parse_local_file
+        with fp.open('rb') as original:
+            _, markdown, metadata = parse_local_file(original, fp.name, asset=book.asset,
+                upload_url=media_url(fp))
+        warning = '<p class="text-muted">' + escape('；'.join(metadata.get('warnings', []))) + '</p>'
+        return warning + render_markdown(markdown)
+    except ValueError as exc:
+        return '<p role="status">' + escape(str(exc)) + '</p>'
+    except Exception:
+        logger.exception('Shared book parser failed')
+        return '<p role="status">正文解析失败，原件已保留，请下载原件核对。</p>'
 
 
 def book_view(request, pk):
@@ -194,9 +155,9 @@ def book_retry(request, pk):
         d = settings.MEDIA_ROOT / 'books'
         d.mkdir(parents=True, exist_ok=True)
         safe = sanitize_filename(book.title)[:80]
-        md_path = d / f'{safe}.md'
-        md_path.write_text(md, encoding='utf-8')
-        book.file_path = str(md_path)
+        md_path = d / f'{uuid4().hex}.md'
+        atomic_write(md_path, md)
+        book.file_path = md_path.relative_to(settings.MEDIA_ROOT.resolve()).as_posix()
         book.save(update_fields=['file_path'])
         messages.success(request, f'已重新抓取并更新正文：{t}')
         log_operation('bookshelf', 'retry', detail=book.title)
@@ -235,7 +196,6 @@ def add_note(request, pk):
     return redirect(f'/bookshelf/book/{pk}/')
 
 
-@csrf_exempt
 def api_golden(request):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'POST required'})
@@ -265,7 +225,6 @@ def api_golden(request):
     return JsonResponse({'ok': True, 'id': obj.pk})
 
 
-@csrf_exempt
 def api_golden_delete(request):
     """删除金句（阅读面板手动移除，仅此途径才移除已收录金句）。"""
     if request.method != 'POST':
@@ -282,7 +241,6 @@ def api_golden_delete(request):
     return JsonResponse({'ok': True})
 
 
-@csrf_exempt
 def api_note_delete(request):
     """删除读书笔记（阅读面板手动移除）。"""
     if request.method != 'POST':
@@ -324,7 +282,6 @@ def api_note(request):
     return JsonResponse({'ok': True, 'id': obj.pk})
 
 
-@csrf_exempt
 def api_ask(request):
     """书籍阅读页划词问 AI：携带书名与选中文本作为上下文，调用现有 AI 模块。"""
     if request.method != 'POST':
@@ -348,26 +305,18 @@ def api_ask(request):
     )
     ans = ask_ai(system, user_prompt, provider_id=provider)
     if not ans:
-        ans = ('（当前未配置可用的 AI 服务，无法调用 AI。请在「系统设置 → AI 服务配置』'
-               '填写对应服务的 API Key 并启用。）') if not ai_available() else '（调用失败，请检查该服务的 Key / 网络）'
+        return JsonResponse({'ok': False, 'error': 'AI 调用失败或未配置服务，请核对目标服务'}, status=502)
     return JsonResponse({'ok': True, 'answer': ans})
 
 
 def book_delete(request, pk):
-    """删除书籍：级联删除读书笔记，并安全删除其本地文件（仅限 MEDIA_ROOT 内）。"""
+    """删除书籍引用与笔记；不可变原件继续保留。"""
     if request.method != 'POST':
         return redirect('/bookshelf/')
     book = get_object_or_404(Book, pk=pk)
     title = book.title
     fp = book.file_path
-    if fp:
-        try:
-            abspath = os.path.abspath(fp)
-            root = os.path.abspath(str(settings.MEDIA_ROOT))
-            if abspath.startswith(root) and os.path.exists(abspath):
-                os.remove(abspath)
-        except OSError:
-            pass
+    # Immutable assets are retained; deleting a reference never destroys shared originals.
     book.delete()  # 级联删除 ReadingNote
     log_operation('bookshelf', 'delete', detail=title)
     return redirect('/bookshelf/')

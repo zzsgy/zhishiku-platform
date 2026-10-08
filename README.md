@@ -1,134 +1,78 @@
-# 平台系统目录说明
+# 智识库平台
 
-本目录（`C:\ZSK\XiTong`）用于存放知识库平台的运行代码、虚拟环境、数据库与运行时文件，与知识数据目录 `C:\ZSK\ZhiShi` 分离。
+个人知识管理与办公平台，使用 Django 5.2、SQLite、本机文件存储、服务器模板与 Markdown 编辑器。包含收集、知识库、WiKI、书架、办公、运行档案与知识星图。
 
-## 目录结构
+本次基于 main 的 `11b1d4678001156d4afca6a6dca13262b587775a`，按《智识库平台_架构深度评估与优化清单》66 项建议实施。逐项状态与限制见 [优化验收对照表](docs/AUDIT-20261008.md)，升级与恢复见 [运行说明](docs/OPERATIONS.md)。这是保留现有 Django 单体的优化版本，不是重建系统或全库迁移。
 
-```
-C:\ZSK\XiTong
-├── venv/                   # Python 虚拟环境
-├── kb/                     # Django 项目配置包
-├── core/                   # 核心应用（模型/配置/上下文）
-├── dashboard/              # 总览模块
-├── starmap/                # 知识星图模块
-├── wiki/                   # WiKI 层模块
-├── bookshelf/              # 书架模块
-├── knowledgebase/          # 知识库模块
-├── inspiration/            # 灵感库模块
-├── selfmedia/              # 自媒体模块（占位）
-├── office/                 # 办公平台模块
-├── collection/             # 知识收集模块
-├── runarchive/             # 运行档案模块
-├── systemsettings/         # 系统设置模块
-├── templates/              # HTML 模板
-├── static/                 # 静态文件（CSS/JS）
-├── static_collected/       # collectstatic 输出
-├── media/                  # 用户上传文件中转
-├── logs/                   # 平台运行日志
-├── temp/                   # 临时文件
-├── db.sqlite3              # SQLite 数据库
-├── requirements.txt        # Python 依赖清单
-└── manage.py               # Django 管理脚本
-```
+## Windows 首次运行
 
-## 启动命令
+已验证 Python 3.11、3.12。安装完整 Python 后，在源码目录依次执行：
 
 ```powershell
-cd C:\ZSK\XiTong
-.\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
+py -3.12 -m venv venv
+.\venv\Scripts\python.exe -X utf8 -m pip install --require-hashes -r requirements.lock
+.\venv\Scripts\python.exe -X utf8 manage.py migrate --noinput
+.\venv\Scripts\python.exe -X utf8 init_config.py
+.\venv\Scripts\python.exe -X utf8 manage.py bootstrap_account
+.\launch-platform.ps1
 ```
 
-## 目录约定
-
-- `C:\ZSK\XiTong`：只存平台本身，不存知识内容。
-- `C:\ZSK\ZhiShi`：存全部知识资产（原始资料、生成内容、运行档案；运行档案已整合原平台搭建文档）。
-
----
-
-# 智识库平台（源码仓库）
-
-个人知识管理平台 —— Django 5.2 单体应用，前后端同构渲染，本地单机运行，数据完全自持。
-
-## 功能模块
-
-| 模块 | 应用 | 说明 |
-|---|---|---|
-| 总览 | `dashboard` | 平台数据概览首页 |
-| 知识库 | `knowledgebase` | 知识条目浏览、检索、双链关系 |
-| 知识收集 | `collection` | 文本 / 本地文件 / 网页 / 图片 / 视频导入入库 |
-| WiKI 层 | `wiki` | 对知识库与办公产物做二次加工，产出 Wiki 层知识 |
-| 知识星图 | `starmap` | 节点-边关系可视化 |
-| 书架 | `bookshelf` | 书籍登记、阅读笔记、金句摘录 |
-| 灵感库 | `inspiration` | 灵感速记与加工日志 |
-| 办公平台 | `office` | 工作记录 → AI 献策 → 生成报告 → 分类标签 → 文件目录 |
-| 运行档案 | `runarchive` | 平台运行档案归档 |
-| 系统设置 | `systemsettings` | 平台配置与**备份/迁移** |
-
-## 环境要求
-
-- Windows 10/11（其他平台未验证）
-- Python **3.10+**（实测 3.13 / 3.14 可用；Django 5.2 官方支持范围为 3.10–3.13）
-- 无需 Node.js、无需外部数据库（内置 SQLite）
-
-## 快速开始
-
-### 方式一：本机已有环境
+没有默认密码。首次创建管理员后，访问 `http://127.0.0.1:8000/` 登录。启动器启动 Waitress 和独立任务 worker，并核对健康接口及监听进程。停止：
 
 ```powershell
-cd C:\ZSK\XiTong
-.\venv\Scripts\python.exe manage.py migrate
-.\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
+.\launch-platform.ps1 -Action Stop
 ```
 
-或直接双击 `启动智识库.bat`（停止用 `停止智识库.bat`）。
+端口冲突不会结束其它进程，可用 `-Port 8010`。若 PowerShell 执行策略不允许运行脚本，可由项目的 `start-zhishiku.cmd` 启动。
 
-### 方式二：全新机器（从零搭建）
+## 数据边界
 
-```powershell
-cd <仓库目录>
-py -3 -m venv venv
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe manage.py migrate
-.\venv\Scripts\python.exe init_config.py
-.\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
-```
-
-安装脚本会自动创建 `logs/`、`media/` 等运行时目录，无需手工准备。
-
-## 依赖说明
-
-依赖分两层，按需安装：
-
-- **`requirements.txt`** —— 核心依赖，平台所有功能正常运行所必需（Django、Pillow、PyPDF2、python-docx、openpyxl、lxml、dashscope 等），体积小、纯 wheel。
-- **`requirements-optional.txt`** —— 可选重型依赖（`yt-dlp`、`moviepy`、`openai-whisper`、`pytesseract` 等），仅在需要视频下载、转码、语音转写、OCR 时安装。
-
-## 数据目录
-
-平台代码与知识数据**物理分离**，便于单独备份与迁移：
-
-- 代码：`<root>\XiTong`
-- 数据：`<root>\ZhiShi`（可用环境变量 `ZHISHIKU_DATA_ROOT` 覆盖）
-
-## 备份与迁移
-
-「系统设置 → 备份与迁移」提供三类独立备份：
-
-| 类型 | 内容 | 用途 |
-|---|---|---|
-| 知识备份 | `ZhiShi` + `media` + 16 张知识表导出 | 只保知识资料 |
-| 系统备份 | 全部程序代码 + 空数据骨架 + 一键安装器 | 生成不含知识数据的空平台，可发给他人搭建 |
-| 迁移备份 | 代码 + 全部知识资料 + `db.sqlite3` | 换机整包搬迁，解压后一键恢复 |
-
-备份输出目录默认为 `<root>\备份输出`，可用环境变量 `ZHISHIKU_BACKUP_ROOT` 覆盖。
-
-## 未纳入版本控制的内容
-
-以下由 `.gitignore` 排除，克隆后需自行重建或另行获取：
-
-| 排除项 | 原因 / 重建方式 |
+| 位置 | 作用 |
 |---|---|
-| `venv/` | 含本机绝对路径，换机无效；用 `python -m venv venv` 重建 |
-| `bin/` | ffmpeg 等外部二进制（约 826 MB），按需自行放置 |
-| `db.sqlite3` | 数据库文件，含个人数据；用 `manage.py migrate` 重建 |
-| `media/`、`logs/` | 运行时数据与日志，程序启动时自动创建 |
-| `static_collected/` | 由 `manage.py collectstatic` 生成 |
+| 源码目录/db.sqlite3 | 账号、知识节点、版本、关系、任务和配置 |
+| 源码目录/media | 上传原件；新原件使用内容哈希，保留原展示名 |
+| 源码同级/ZhiShi | 正文导出、办公产物等；数据库是知识正文权威 |
+| 源码同级/备份输出 | 含清单与逐文件哈希的备份包 |
+| 源码目录/.instance-secret | 独立实例密钥；禁止提交或分发 |
+| 系统凭据存储/环境变量 | AI 与 Gitee 的秘密，备份不携带 |
+
+`.env.example` 是环境变量说明，不会被自动加载。完整路径、升级与配置说明见 [运行说明](docs/OPERATIONS.md)。现有用户数据应先备份，在复制的实例或隔离恢复目录升级；不要将源码包覆盖解压到正在使用的实例。
+
+## 本次关键行为
+
+- 业务页面要求登录，设置与备份要求管理员，写请求校验 CSRF；原件展示受保护。
+- 原件不可变保存；知识导出使用节点 ID，同名与改名不再共用正文文件。
+- 编辑提供版本冲突检测、修订历史和节点回收站；AI 修改现有正文进入审核。
+- 视频与备份进入持久化任务，由独立 worker 执行；中断后明确失败而非永久显示运行中。
+- 云端 AI 资料外发与自动跨服务降级默认关闭。本机兼容模型可明确设置为无密钥。
+- PDF 保留原件，提取逐页文字与页码。复杂多栏、图表、公式及扫描 OCR 尚未完成完整排版保真；页面会提示核对原件。
+
+## 备份与恢复
+
+在设置页创建知识/系统/迁移备份，确保 worker 正在运行。命令行验证与隔离恢复：
+
+```powershell
+.\venv\Scripts\python.exe -X utf8 manage.py verify_backup "D:\备份\BACKUP.zip"
+.\venv\Scripts\python.exe -X utf8 manage.py restore_backup "D:\备份\BACKUP.zip" --destination "D:\全新恢复目录"
+```
+
+目标目录必须不存在。恢复检查通过后再发布到目标目录。凭据需重配，外部工作目录需核对；这是新目录恢复，不提供覆盖旧库或合并导入。仅恢复可信来源；哈希不提供签名或加密。
+
+## 开发验证
+
+```powershell
+.\venv\Scripts\python.exe -X utf8 -m pip install -r requirements-test.txt
+.\venv\Scripts\python.exe -m playwright install chromium
+.\venv\Scripts\python.exe -X utf8 manage.py check
+.\venv\Scripts\python.exe -X utf8 manage.py makemigrations --check --dry-run
+.\venv\Scripts\python.exe -X utf8 manage.py test --noinput
+.\venv\Scripts\python.exe -X utf8 -m pip_audit -r requirements.lock --no-deps --disable-pip
+```
+
+CI 配置在 `.github/workflows/checks.yml`，包括 Windows/Ubuntu 与 Python 3.11/3.12；本次仅实际执行了 Windows 环境，不能把配置矩阵写成全平台已验收。
+
+## 可选能力与发行边界
+
+视频下载、FFmpeg、OCR 与 Whisper 需要额外工具/模型，见 `requirements-optional.txt`。本次未安装整套可选工具、未完成其漏洞审计，不把模拟测试当成真实视频/OCR 验收。
+
+当前按个人本机应用设计；账号登录不等于多人数据隔离。网络部署、跨机同步、文档级隐私策略、精确 Token/成本统计、复杂 PDF 保真与成熟度状态机仍需后续实施。依赖清单见 [DEPENDENCIES.json](docs/DEPENDENCIES.json)；原仓库未发现项目级 LICENSE，此次未擅自设置项目许可证，分发前应核对原作者及第三方许可。

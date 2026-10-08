@@ -18,6 +18,7 @@
 
 <form method="post" id="mdForm" action="{% if node %}/wiki/node/{{ node.pk }}/edit/{% else %}/wiki/create/{% endif %}">
   {% csrf_token %}
+  {% if node %}<input type="hidden" name="version" value="{{ node.version }}">{% endif %}
   <div class="row g-3">
     <div class="col-md-6">
       <label class="form-label small">标题</label>
@@ -131,6 +132,7 @@
     <div id="mdRich" class="kb-prose kb-editor" contenteditable="true" spellcheck="false"
          data-render-url="/wiki/api/render/"
          data-node-id="{% if node %}{{ node.pk }}{% else %}new{% endif %}"
+         data-draft-namespace="{{ draft_namespace }}" data-version="{{ node.version|default:0 }}"
          aria-label="正文编辑区">{{ content_html|safe }}</div>
 
     {% comment %}

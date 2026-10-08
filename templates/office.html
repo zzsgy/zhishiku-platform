@@ -315,6 +315,7 @@
 
   <!-- ① 工作记录（记录工作事宜表单 + 按天记录列表，同属一个模块） -->
   <section class="office-module is-active" data-office-panel="records">
+{% include "_pagination.html" with page_obj=record_page %}
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm mb-3">
@@ -409,6 +410,7 @@
 
   <!-- ② AI 智能献策 -->
   <section class="office-module" id="ai-advise" data-office-panel="advise">
+{% include "_pagination.html" with page_obj=advise_page %}
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm">
@@ -469,6 +471,7 @@
 
   <!-- ③ 生成报告：先选报告区间，再点类型生成；下方为已生成报告列表 -->
   <section class="office-module" data-office-panel="reports">
+{% include "_pagination.html" with page_obj=report_page %}
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm">
@@ -546,8 +549,7 @@
               {% endfor %}
             </div>
             <p class="os-hint mb-0">
-              <i class="bi bi-folder2-open"></i> 报告输出目录：<code>{{ report_output_root }}\&lt;报告类型&gt;\</code>
-              ，文件名即报告名（如 <code>2026.09.01~2026.09.30月报.md</code>）。
+              <i class="bi bi-folder2-open"></i> 点击报告可查看正文并下载；重复生成会分别保存，保留已有报告。
             </p>
           </div>
         </div>
@@ -695,14 +697,14 @@ window.__officeInitPanels = function (fallback) {
   var panels = Array.prototype.slice.call(document.querySelectorAll('[data-office-panel]'));
   function activate(name, updateHash) {
     if (!tabs.some(function (t) { return t.dataset.officeTab === name; })) name = 'records';
-    tabs.forEach(function (t) { t.classList.toggle('is-active', t.dataset.officeTab === name); });
-    panels.forEach(function (p) { p.classList.toggle('is-active', p.dataset.officePanel === name); });
+    tabs.forEach(function (t) { var active=t.dataset.officeTab===name; t.classList.toggle('is-active',active); t.setAttribute('role','tab'); t.setAttribute('aria-selected', String(active)); t.tabIndex=active?0:-1; });
+    panels.forEach(function (p) { var active=p.dataset.officePanel===name; p.classList.toggle('is-active',active); p.setAttribute('role','tabpanel'); p.hidden=!active; });
     if (updateHash && history.replaceState) history.replaceState(null, '', '#' + name);
   }
-  tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.officeTab, true); }); });
+  tabs.forEach(function (tab, index) { tab.parentElement.setAttribute('role','tablist'); tab.onclick=function(){activate(tab.dataset.officeTab,true);}; tab.onkeydown=function(e){var next=e.key==='ArrowRight'?(index+1)%tabs.length:e.key==='ArrowLeft'?(index+tabs.length-1)%tabs.length:e.key==='Home'?0:e.key==='End'?tabs.length-1:null;if(next!==null){e.preventDefault();activate(tabs[next].dataset.officeTab,true);tabs[next].focus();}}; });
   var params = new URLSearchParams(location.search);
   var fromHash = location.hash.replace('#', '');
-  var initial = params.has('cat') || params.has('wfq') ? 'files' : fromHash;
+  var initial = fromHash || ((params.has('cat') || params.has('wfq')) ? 'files' : '');
   if (fromHash === 'ai-advise') initial = 'advise';
   if (fromHash === 'report-form') initial = 'reports';
   if (fromHash === 'workfiles' || fromHash === 'work-cats') initial = 'files';
@@ -803,7 +805,7 @@ window.__officeInitRecords = function () {
           location.reload(); // 日期变更：记录跨天分组移动，整页刷新
           return;
         }
-        cell.innerHTML = cell.textContent; // textContent 写回，保留样式类
+        cell.textContent = cell.textContent; // textContent 写回，保留样式类
       });
     }
     function cancel() {

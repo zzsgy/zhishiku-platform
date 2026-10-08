@@ -2,6 +2,7 @@ from django.db import models
 
 
 class Book(models.Model):
+    asset = models.ForeignKey('core.Asset', null=True, blank=True, on_delete=models.SET_NULL)
     STATUS = [('unread', '未读'), ('reading', '在读'), ('done', '读完')]
     title = models.CharField('书名', max_length=256)
     author = models.CharField('作者', max_length=128, blank=True)

@@ -35,7 +35,7 @@
   if (!rich || !src || !form) return;
 
   var renderUrl = rich.getAttribute('data-render-url') || '/wiki/api/render/';
-  var draftKey = 'kbmd:' + (rich.getAttribute('data-node-id') || 'new');
+  var draftKey = 'kbmd:' + rich.getAttribute('data-draft-namespace') + ':' + (rich.getAttribute('data-node-id') || 'new');
   var initialMd = src.value || '';
   var richMode = true;
 
@@ -452,7 +452,7 @@
 
   function saveDraft() {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ md: src.value, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ md: src.value, at: Date.now(), version:rich.getAttribute('data-version') }));
     } catch (e) { /* 隐私模式/配额满：草稿是加分项，失败不影响编辑 */ }
   }
 
@@ -1047,7 +1047,7 @@
       }
       if (forceEl) forceEl.checked = true;
     }
-    try { localStorage.removeItem(draftKey); } catch (err) { /* 忽略 */ }
+    try { localStorage.setItem(draftKey, JSON.stringify({ md: src.value, at: Date.now(), version:rich.getAttribute('data-version') })); } catch (err) { /* 保留已有草稿 */ }
   });
 
   /* --------------------------------------------------------------- 启动 */

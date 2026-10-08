@@ -84,7 +84,7 @@ def _walk(root, mode, skip_under=None, skip_paths=None):
         try:
             entries = list(os.scandir(cur))
         except OSError:
-            continue
+            raise
         for e in entries:
             epath = Path(e.path)
             if epath in skip_paths:
@@ -107,7 +107,7 @@ def _walk(root, mode, skip_under=None, skip_paths=None):
                         continue
                     yield epath, child_rel, e.stat().st_size, False
             except OSError:
-                continue
+                raise
 
 
 def _skip_paths_for(kind, options):
@@ -371,13 +371,16 @@ def package_name(kind):
     return f'{PACKAGE_PREFIX.get(kind, spec["title"])}_{ts}'
 
 
-def _dump_database(models, target_dir):
+def _dump_database(models, target_dir, database='default', snapshot_path=None):
     """把指定的数据表导出成 JSON（dumpdata）。返回 (文件名, 字节数) 或 (None, 0)。"""
+    if snapshot_path:
+        from .reliable_backup import dump_snapshot
+        return dump_snapshot(snapshot_path, models, target_dir)
     from io import StringIO
     from django.core.management import call_command
 
     buf = StringIO()
-    call_command('dumpdata', *models, indent=2, stdout=buf, verbosity=0)
+    call_command('dumpdata', *models, indent=2, stdout=buf, verbosity=0, database=database)
     text = buf.getvalue() or '[]'
     target_dir.mkdir(parents=True, exist_ok=True)
     fn = '知识数据.json'

@@ -135,8 +135,11 @@ def _filter_logs(request):
     return logs
 
 
+from core.pagination import paginate
+
 def index(request):
-    logs = _filter_logs(request)
+    page = paginate(request, _filter_logs(request).order_by("-created", "-pk"), 50)
+    logs = page
     modules = [
         {'module': m['module'], 'c': m['c'],
          'label': MODULE_NAMES.get(m['module'], m['module'])}
@@ -145,44 +148,38 @@ def index(request):
     for l in logs:
         l.explain = _explain(l)
     return render(request, 'runarchive.html', {
-        'logs': logs, 'modules': modules,
+        'logs': logs, 'modules': modules, 'page_obj': page,
         'module': (request.GET.get('module') or '').strip(),
         'q': (request.GET.get('q') or '').strip(),
     })
 
 
+class Echo:
+    def write(self, value):
+        return value
+
+
 def export_csv(request):
-    """导出运行档案为 CSV（沿用当前 module/q 过滤），含中文说明列。"""
-    logs = _filter_logs(request)
-    resp = HttpResponse(content_type='text/csv')
-    resp['Content-Disposition'] = 'attachment; filename="runarchive_%s.csv"' % timezone.now().strftime('%Y%m%d')
-    resp.write('\ufeff')  # UTF-8 BOM，避免 Windows Excel 打开中文乱码
-    writer = csv.writer(resp)
-    writer.writerow(['时间', '模块', '动作', '明细', '说明'])
-    for l in logs:
-        writer.writerow([
-            l.created.strftime('%Y-%m-%d %H:%M:%S'),
-            l.module, l.action, l.detail, _explain(l),
-        ])
-    return resp
+    from django.http import StreamingHttpResponse
+    writer = csv.writer(Echo())
+    def rows():
+        yield '\ufeff'
+        yield writer.writerow(['时间', '模块', '动作', '明细', '说明'])
+        for log in _filter_logs(request).iterator(chunk_size=500):
+            yield writer.writerow([log.created.strftime('%Y-%m-%d %H:%M:%S'), log.module,
+                                   log.action, log.detail, _explain(log)])
+    response = StreamingHttpResponse(rows(), content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="runarchive.csv"'
+    return response
 
 
 def export_md(request):
-    """导出运行档案为 Markdown 表格（沿用当前 module/q 过滤），含中文说明列。"""
-    logs = _filter_logs(request)
-    lines = [
-        '# 运行档案导出',
-        '',
-        '> 导出时间：%s' % timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
-        '',
-        '| 时间 | 模块 | 动作 | 明细 | 说明 |',
-        '| --- | --- | --- | --- | --- |',
-    ]
-    for l in logs:
-        detail = (l.detail or '').replace('|', '\\|').replace('\n', ' ').replace('\r', '')
-        explain = _explain(l).replace('|', '\\|')
-        lines.append('| %s | %s | %s | %s | %s |' % (
-            l.created.strftime('%Y-%m-%d %H:%M:%S'), l.module, l.action, detail, explain))
-    resp = HttpResponse('\n'.join(lines), content_type='text/markdown; charset=utf-8')
-    resp['Content-Disposition'] = 'attachment; filename="runarchive_%s.md"' % timezone.now().strftime('%Y%m%d')
-    return resp
+    from django.http import StreamingHttpResponse
+    def rows():
+        yield '# 运行档案导出\n\n| 时间 | 模块 | 动作 | 明细 | 说明 |\n| --- | --- | --- | --- | --- |\n'
+        for log in _filter_logs(request).iterator(chunk_size=500):
+            values = [log.created.strftime('%Y-%m-%d %H:%M:%S'), log.module, log.action, log.detail, _explain(log)]
+            yield '| ' + ' | '.join(str(v).replace('|', '\\|').replace('\n', ' ').replace('\r', '') for v in values) + ' |\n'
+    response = StreamingHttpResponse(rows(), content_type='text/markdown; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="runarchive.md"'
+    return response

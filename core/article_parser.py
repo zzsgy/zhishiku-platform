@@ -181,7 +181,7 @@ def _host_is_blocked(url):
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
         raise WebParseError('域名解析失败（%s），请检查链接或本机网络。' % host, 'timeout')
-    strict = os.environ.get('KB_WEBPARSE_BLOCK_PRIVATE') == '1'
+    strict = os.environ.get('ZHISHIKU_ALLOW_PRIVATE_FETCH', '0') != '1'
     for info in infos:
         raw_ip = info[4][0]
         try:

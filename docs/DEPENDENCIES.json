@@ -1,0 +1,587 @@
+{
+  "generated": "2026-10-08",
+  "source": "requirements.lock and installed distribution metadata",
+  "scope": "Python runtime only; universal conditional packages may not be installed on Windows",
+  "audit": {
+    "environment": "Windows Python 3.11",
+    "dependency_count": 70,
+    "known_vulnerabilities": 0,
+    "result_file": "dependency-audit-lock.json",
+    "optional_tools_audited": false
+  },
+  "license_notice": "Original repository has no project-level LICENSE. Metadata is an inventory, not a complete license review. Optional binaries, frontend/CDN and redistributed material require separate verification.",
+  "dependencies": [
+    {
+      "name": "aiohappyeyeballs",
+      "locked_version": "2.7.1",
+      "installed_on_audited_windows": "2.7.1",
+      "license_metadata": "PSF-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Python Software Foundation License"
+      ]
+    },
+    {
+      "name": "aiohttp",
+      "locked_version": "3.14.4",
+      "installed_on_audited_windows": "3.14.4",
+      "license_metadata": "Apache-2.0 AND MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "aiosignal",
+      "locked_version": "1.4.0",
+      "installed_on_audited_windows": "1.4.0",
+      "license_metadata": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ]
+    },
+    {
+      "name": "annotated-doc",
+      "locked_version": "0.0.5",
+      "installed_on_audited_windows": "0.0.5",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "anyio",
+      "locked_version": "4.15.1",
+      "installed_on_audited_windows": "4.15.1",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "asgiref",
+      "locked_version": "3.12.1",
+      "installed_on_audited_windows": "3.12.1",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "attrs",
+      "locked_version": "26.1.0",
+      "installed_on_audited_windows": "26.1.0",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "backports-tarfile",
+      "locked_version": "1.2.0",
+      "installed_on_audited_windows": "1.2.0",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "beautifulsoup4",
+      "locked_version": "4.15.0",
+      "installed_on_audited_windows": "4.15.0",
+      "license_metadata": "MIT License",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "certifi",
+      "locked_version": "2026.7.22",
+      "installed_on_audited_windows": "2026.7.22",
+      "license_metadata": "MPL-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)"
+      ]
+    },
+    {
+      "name": "cffi",
+      "locked_version": "2.1.1",
+      "installed_on_audited_windows": "2.1.1",
+      "license_metadata": "MIT-0",
+      "license_classifiers": []
+    },
+    {
+      "name": "chardet",
+      "locked_version": "5.2.0",
+      "installed_on_audited_windows": "5.2.0",
+      "license_metadata": "LGPL",
+      "license_classifiers": [
+        "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)"
+      ]
+    },
+    {
+      "name": "charset-normalizer",
+      "locked_version": "3.5.2",
+      "installed_on_audited_windows": "3.5.2",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "colorama",
+      "locked_version": "0.4.6",
+      "installed_on_audited_windows": "0.4.6",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "cryptography",
+      "locked_version": "50.0.2",
+      "installed_on_audited_windows": "50.0.2",
+      "license_metadata": "Apache-2.0 OR BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "cssselect",
+      "locked_version": "1.3.0",
+      "installed_on_audited_windows": "1.3.0",
+      "license_metadata": "BSD",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "dashscope",
+      "locked_version": "1.27.5",
+      "installed_on_audited_windows": "1.27.5",
+      "license_metadata": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ]
+    },
+    {
+      "name": "diff-match-patch",
+      "locked_version": "20241021",
+      "installed_on_audited_windows": "20241021",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ]
+    },
+    {
+      "name": "django",
+      "locked_version": "5.2.18",
+      "installed_on_audited_windows": "5.2.18",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "django-import-export",
+      "locked_version": "4.4.1",
+      "installed_on_audited_windows": "4.4.1",
+      "license_metadata": "Copyright (c) Bojan Mihelac and individual contributors.\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without modification,\nare permitted provided that the following conditions are met:\n\n    1. Redistributions of source code must retain the above copyright notice,\n       this list of conditions and the following disclaimer.\n\n    2. Redistributions in binary form must reproduce the above copyright\n       notice, this list of conditions and the following disclaimer in the\n       documentation and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\nANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR\nANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON\nANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "django-simpleui",
+      "locked_version": "2026.1.13",
+      "installed_on_audited_windows": "2026.1.13",
+      "license_metadata": "Apache License 2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "et-xmlfile",
+      "locked_version": "2.0.0",
+      "installed_on_audited_windows": "2.0.0",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "frozenlist",
+      "locked_version": "1.8.0",
+      "installed_on_audited_windows": "1.8.0",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "gitdb",
+      "locked_version": "4.0.12",
+      "installed_on_audited_windows": "4.0.12",
+      "license_metadata": "BSD License",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "gitpython",
+      "locked_version": "3.1.62",
+      "installed_on_audited_windows": "3.1.62",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "h11",
+      "locked_version": "0.16.0",
+      "installed_on_audited_windows": "0.16.0",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "httpcore",
+      "locked_version": "1.0.9",
+      "installed_on_audited_windows": "1.0.9",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "httpx",
+      "locked_version": "0.28.1",
+      "installed_on_audited_windows": "0.28.1",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "httpx-sse",
+      "locked_version": "0.4.3",
+      "installed_on_audited_windows": "0.4.3",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "idna",
+      "locked_version": "3.20",
+      "installed_on_audited_windows": "3.20",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "importlib-metadata",
+      "locked_version": "9.0.1",
+      "installed_on_audited_windows": "9.0.1",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "jaraco-classes",
+      "locked_version": "3.4.0",
+      "installed_on_audited_windows": "3.4.0",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "jaraco-context",
+      "locked_version": "6.1.2",
+      "installed_on_audited_windows": "6.1.2",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "jaraco-functools",
+      "locked_version": "4.6.0",
+      "installed_on_audited_windows": "4.6.0",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "jeepney",
+      "locked_version": "0.9.0",
+      "installed_on_audited_windows": null,
+      "license_metadata": "",
+      "license_classifiers": []
+    },
+    {
+      "name": "keyring",
+      "locked_version": "25.6.0",
+      "installed_on_audited_windows": "25.6.0",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "lxml",
+      "locked_version": "6.1.3",
+      "installed_on_audited_windows": "6.1.3",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "lxml-html-clean",
+      "locked_version": "0.4.5",
+      "installed_on_audited_windows": "0.4.5",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "markdown",
+      "locked_version": "3.10.3",
+      "installed_on_audited_windows": "3.10.3",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "markdown-it-py",
+      "locked_version": "4.2.0",
+      "installed_on_audited_windows": "4.2.0",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "mdurl",
+      "locked_version": "0.1.2",
+      "installed_on_audited_windows": "0.1.2",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "more-itertools",
+      "locked_version": "11.1.0",
+      "installed_on_audited_windows": "11.1.0",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "multidict",
+      "locked_version": "6.9.1",
+      "installed_on_audited_windows": "6.9.1",
+      "license_metadata": "Apache License 2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "nh3",
+      "locked_version": "0.3.2",
+      "installed_on_audited_windows": "0.3.2",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "openpyxl",
+      "locked_version": "3.1.5",
+      "installed_on_audited_windows": "3.1.5",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "pillow",
+      "locked_version": "12.3.0",
+      "installed_on_audited_windows": "12.3.0",
+      "license_metadata": "MIT-CMU",
+      "license_classifiers": []
+    },
+    {
+      "name": "propcache",
+      "locked_version": "0.5.4",
+      "installed_on_audited_windows": "0.5.4",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "pycparser",
+      "locked_version": "3.0",
+      "installed_on_audited_windows": "3.0",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "pygments",
+      "locked_version": "2.21.0",
+      "installed_on_audited_windows": "2.21.0",
+      "license_metadata": "BSD-2-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "pypdf",
+      "locked_version": "6.19.0",
+      "installed_on_audited_windows": "6.19.0",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "python-docx",
+      "locked_version": "1.2.0",
+      "installed_on_audited_windows": "1.2.0",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "python-pptx",
+      "locked_version": "1.0.2",
+      "installed_on_audited_windows": "1.0.2",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "pywin32-ctypes",
+      "locked_version": "0.2.3",
+      "installed_on_audited_windows": "0.2.3",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": []
+    },
+    {
+      "name": "readability-lxml",
+      "locked_version": "0.9",
+      "installed_on_audited_windows": "0.9",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ]
+    },
+    {
+      "name": "requests",
+      "locked_version": "2.34.2",
+      "installed_on_audited_windows": "2.34.2",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ]
+    },
+    {
+      "name": "rich",
+      "locked_version": "15.0.0",
+      "installed_on_audited_windows": "15.0.0",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "secretstorage",
+      "locked_version": "3.5.0",
+      "installed_on_audited_windows": null,
+      "license_metadata": "",
+      "license_classifiers": []
+    },
+    {
+      "name": "shellingham",
+      "locked_version": "1.5.4",
+      "installed_on_audited_windows": "1.5.4",
+      "license_metadata": "ISC License",
+      "license_classifiers": [
+        "License :: OSI Approved :: ISC License (ISCL)"
+      ]
+    },
+    {
+      "name": "smmap",
+      "locked_version": "5.0.3",
+      "installed_on_audited_windows": "5.0.3",
+      "license_metadata": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "soupsieve",
+      "locked_version": "2.10",
+      "installed_on_audited_windows": "2.10",
+      "license_metadata": "MIT",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "sqlparse",
+      "locked_version": "0.6.0",
+      "installed_on_audited_windows": "0.6.0",
+      "license_metadata": "",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "tablib",
+      "locked_version": "3.10.0",
+      "installed_on_audited_windows": "3.10.0",
+      "license_metadata": "MIT License",
+      "license_classifiers": [
+        "License :: OSI Approved :: MIT License"
+      ]
+    },
+    {
+      "name": "typer",
+      "locked_version": "0.27.3",
+      "installed_on_audited_windows": "0.27.3",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "typing-extensions",
+      "locked_version": "4.16.0",
+      "installed_on_audited_windows": "4.16.0",
+      "license_metadata": "PSF-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "tzdata",
+      "locked_version": "2026.4",
+      "installed_on_audited_windows": "2026.4",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "urllib3",
+      "locked_version": "2.8.0",
+      "installed_on_audited_windows": "2.8.0",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "waitress",
+      "locked_version": "3.0.2",
+      "installed_on_audited_windows": "3.0.2",
+      "license_metadata": "ZPL 2.1",
+      "license_classifiers": [
+        "License :: OSI Approved :: Zope Public License"
+      ]
+    },
+    {
+      "name": "websocket-client",
+      "locked_version": "1.9.2",
+      "installed_on_audited_windows": "1.9.2",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "whitenoise",
+      "locked_version": "6.11.0",
+      "installed_on_audited_windows": "6.11.0",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    },
+    {
+      "name": "xlsxwriter",
+      "locked_version": "3.2.9",
+      "installed_on_audited_windows": "3.2.9",
+      "license_metadata": "BSD-2-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ]
+    },
+    {
+      "name": "yarl",
+      "locked_version": "1.25.1",
+      "installed_on_audited_windows": "1.25.1",
+      "license_metadata": "Apache-2.0",
+      "license_classifiers": []
+    },
+    {
+      "name": "zipp",
+      "locked_version": "4.1.1",
+      "installed_on_audited_windows": "4.1.1",
+      "license_metadata": "MIT",
+      "license_classifiers": []
+    }
+  ]
+}
