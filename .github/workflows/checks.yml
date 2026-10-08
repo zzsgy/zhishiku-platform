@@ -13,6 +13,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+      - run: python -X utf8 -m pip install --require-hashes -r requirements-bootstrap.txt
       - run: python -X utf8 -m pip install --require-hashes -r requirements.lock
       - run: python -X utf8 -m pip install -r requirements-test.txt
       - run: python -m playwright install --with-deps chromium

@@ -58,6 +58,7 @@ set "HASHOPT="
 if exist "%APP%\requirements.lock" set "HASHOPT=--require-hashes"
 if exist "%APP%\requirements.lock" set "REQ=%APP%\requirements.lock"
 set "REQOPT=%APP%\requirements-optional.txt"
+set "REQBOOT=%APP%\requirements-bootstrap.txt"
 set "PY="
 set "WITHOPT=0"
 if /i "%~1"=="--full" set "WITHOPT=1"
@@ -74,6 +75,7 @@ echo.
 
 if not exist "%APP%\manage.py" goto :no_package
 if not exist "%REQ%" goto :no_requirements
+if not exist "%REQBOOT%" goto :no_requirements
 
 rem ---------- 1. locate a suitable Python ----------
 rem  A candidate is accepted only when it is 3.11 or 3.12 AND can really create
@@ -107,7 +109,11 @@ goto :venv_done
 echo       already present, reusing it
 :venv_done
 if not exist "%PYEXE%" goto :venv_fail
-"%PYEXE%" -X utf8 -m pip install --upgrade pip --quiet --disable-pip-version-check >nul 2>&1
+"%PYEXE%" -X utf8 -m pip install --require-hashes -r "%REQBOOT%" %MIRROR% --disable-pip-version-check
+if errorlevel 1 (
+  "%PYEXE%" -X utf8 -m pip install --require-hashes -r "%REQBOOT%" --disable-pip-version-check
+  if errorlevel 1 goto :pip_fail
+)
 
 rem ---------- 3. dependencies ----------
 echo.

@@ -73,4 +73,6 @@ python -X utf8 manage.py restore_backup "BACKUP.zip" --destination "NEW_FOLDER"
 
 回归测试包括认证、CSRF、注入、不可变原件、路径边界、冲突/回收站、SQL 查询增长、逐页 PDF、失败导出、任务中断、WAL 在线备份、篡改包、新目录恢复及浏览器流程。故障注入的 ERROR 日志是预期测试条件，最终以测试结果为准。
 
+虚拟环境自带的 pip/setuptools 不在运行锁文件范围内，使用 requirements-bootstrap.txt 单独锁定并校验安装工具。首次安装与 CI 在运行依赖之前安装此文件；已有环境也应检查全部实际安装包，不能只审计 requirements.lock。2026-10-08 的本机升级演练补查发现旧安装工具的漏洞提示，已锁定 pip 26.2.1/setuptools 83.0.0；具体安装实例的完整审计结果以本机同步记录为准。
+
 Windows 的 Python 3.11/3.12 已本机执行；Ubuntu/多版本仅配置 CI，尚未运行。可选视频/OCR/语音工具未安装实测；模拟超时与参数上限测试不等于整条工具链验收。程序与依赖版权状态见 DEPENDENCIES.json，需要另行核对原仓库许可与第三方分发条件。

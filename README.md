@@ -10,6 +10,7 @@
 
 ```powershell
 py -3.12 -m venv venv
+.\venv\Scripts\python.exe -X utf8 -m pip install --require-hashes -r requirements-bootstrap.txt
 .\venv\Scripts\python.exe -X utf8 -m pip install --require-hashes -r requirements.lock
 .\venv\Scripts\python.exe -X utf8 manage.py migrate --noinput
 .\venv\Scripts\python.exe -X utf8 init_config.py
