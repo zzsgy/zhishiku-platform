@@ -81,10 +81,6 @@
       </a>
 
       <div class="kb-nav-group-label">系统</div>
-      <a class="kb-nav-item {% if active_module == 'runarchive' %}active{% endif %}" href="/runarchive/" title="运行档案">
-        <i class="bi bi-clock-history"></i>
-        <span>活动记录</span>
-      </a>
       <a class="kb-nav-item {% if active_module == 'settings' %}active{% endif %}" href="/settings/" title="系统设置">
         <i class="bi bi-gear"></i>
         <span>系统设置</span>
@@ -92,11 +88,7 @@
     </nav>
 
     <div class="kb-sidebar-footer">
-      <button type="button" class="kb-theme-toggle" id="themeToggle" title="切换主题" aria-label="切换明暗主题">
-        <i class="bi bi-circle-half"></i>
-        <span>主题</span>
-      </button>
-      <form method="post" action="{% url 'logout' %}" class="mt-2">{% csrf_token %}<button type="submit" class="kb-theme-toggle"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>退出登录</span></button></form>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="kb-theme-toggle"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>退出登录</span></button></form>
     </div>
   </aside>
   <button class="kb-sidebar-backdrop" id="kbSidebarBackdrop" type="button" aria-label="关闭导航"></button>

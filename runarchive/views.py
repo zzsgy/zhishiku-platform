@@ -138,20 +138,12 @@ def _filter_logs(request):
 from core.pagination import paginate
 
 def index(request):
-    page = paginate(request, _filter_logs(request).order_by("-created", "-pk"), 50)
-    logs = page
-    modules = [
-        {'module': m['module'], 'c': m['c'],
-         'label': MODULE_NAMES.get(m['module'], m['module'])}
-        for m in OperationLog.objects.values('module').annotate(c=Count('id')).order_by('-c')
-    ]
-    for l in logs:
-        l.explain = _explain(l)
-    return render(request, 'runarchive.html', {
-        'logs': logs, 'modules': modules, 'page_obj': page,
-        'module': (request.GET.get('module') or '').strip(),
-        'q': (request.GET.get('q') or '').strip(),
-    })
+    """活动记录已收入「系统设置」页的活动记录分区；旧入口整体跳转过去。
+
+    导出（CSV / Markdown）仍由本模块的 export 接口提供，不受影响。
+    """
+    from django.shortcuts import redirect
+    return redirect('/settings/?tab=activity')
 
 
 class Echo:

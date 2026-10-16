@@ -20,20 +20,30 @@
 
 <div class="kb-section-head">
   <div><h2>工作概览</h2><p>你的知识与内容状态</p></div>
-  <span class="kb-section-date">最近 7 天</span>
+  <span class="kb-section-date">累计</span>
 </div>
-<div class="kb-overview-grid">
-  <div class="kb-metric-strip">
-    <a href="/knowledgebase/" class="kb-metric"><span>知识条目</span><strong>{{ node_count }}</strong><small>{{ base_count }} 个知识库</small></a>
-    <a href="/collection/" class="kb-metric"><span>已收集</span><strong>{{ collection_count }}</strong><small>资料与链接</small></a>
-    <a href="/notes/" class="kb-metric"><span>灵感笔记</span><strong>{{ insp_count }}</strong><small>{{ golden_count }} 条金句</small></a>
-    <a href="/starmap/" class="kb-metric"><span>知识关系</span><strong>{{ edge_count }}</strong><small>查看关系图谱</small></a>
-  </div>
-  <div class="kb-trend-panel">
-    <div class="kb-panel-title"><span>活跃趋势</span><span class="kb-trend-legend"><i></i>操作 <i></i>新增知识</span></div>
-    <div id="trendChart" class="kb-trend-chart" aria-label="最近七天操作与新增知识趋势"></div>
-  </div>
+<div class="kb-metric-strip">
+  <a href="/knowledgebase/" class="kb-metric"><span>知识条目</span><strong>{{ node_count }}</strong><small>{{ base_count }} 个知识库</small></a>
+  <a href="/collection/" class="kb-metric"><span>已收集</span><strong>{{ collection_count }}</strong><small>资料与链接</small></a>
+  <a href="/notes/" class="kb-metric"><span>灵感笔记</span><strong>{{ insp_count }}</strong><small>{{ golden_count }} 条金句</small></a>
+  <a href="/starmap/" class="kb-metric"><span>知识关系</span><strong>{{ edge_count }}</strong><small>查看关系图谱</small></a>
 </div>
+
+<!-- 常用网址：分类标签 + 图标磁贴，替代原「活跃趋势」板块 -->
+<div class="kb-nav-panel">
+  <div class="kb-nav-head">
+    <div class="kb-nav-tabs" id="navTabs" role="tablist" aria-label="常用网址分类">
+      <button type="button" class="kb-nav-tab is-active" data-cat="all" role="tab" aria-selected="true">
+        <span class="kb-nav-dot"></span>我的常用网址
+      </button>
+    </div>
+    <div class="kb-nav-actions">
+      <button type="button" class="btn btn-sm btn-outline-primary" id="navAddBtn"><i class="bi bi-plus-lg"></i> 添加网址</button>
+    </div>
+  </div>
+  <div class="kb-nav-grid" id="navGrid" aria-live="polite"></div>
+</div>
+{{ nav_categories|json_script:'nav-data' }}
 
 <div class="kb-recent-grid">
   <section class="kb-clean-panel">
@@ -45,7 +55,7 @@
     </div>
   </section>
   <section class="kb-clean-panel">
-    <div class="kb-panel-title"><span>最近活动</span><a href="/runarchive/">查看全部 <i class="bi bi-arrow-right"></i></a></div>
+    <div class="kb-panel-title"><span>最近活动</span><a href="/settings/?tab=activity">查看全部 <i class="bi bi-arrow-right"></i></a></div>
     <div class="kb-activity-list">
       {% for l in recent_logs|slice:':7' %}
       <div class="kb-activity-item"><span class="kb-activity-dot"></span><span><strong>{{ l.module }}</strong><small>{{ l.action }}{% if l.detail %} · {{ l.detail|truncatechars:34 }}{% endif %}</small></span><time>{{ l.created|date:'m-d H:i' }}</time></div>
@@ -53,23 +63,176 @@
     </div>
   </section>
 </div>
+
+<!-- 添加/编辑网址弹层 -->
+<div class="modal fade" id="navModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title" id="navModalTitle">添加网址</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="navF_id">
+        <div class="mb-2"><label class="form-label small">名称</label><input id="navF_name" class="form-control form-control-sm" placeholder="如：京东商城" maxlength="64"></div>
+        <div class="mb-2"><label class="form-label small">网址</label><input id="navF_url" class="form-control form-control-sm" placeholder="www.jd.com 或 https://…"></div>
+        <div class="mb-1"><label class="form-label small">分类</label><select id="navF_cat" class="form-select form-select-sm"></select></div>
+      </div>
+      <div class="modal-footer py-2"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button><button class="btn btn-primary btn-sm" id="navF_save">保存</button></div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+/* ---------------- 常用网址导航 ---------------- */
 (function () {
-  const days = {{ days|safe }};
-  const logs = {{ log_trend|safe }};
-  const nodes = {{ node_trend|safe }};
-  const box = document.getElementById('trendChart');
-  const max = Math.max(1, ...logs, ...nodes);
-  const width = 720, height = 190, padX = 28, padY = 24, innerH = height - 50;
-  const step = (width - padX * 2) / Math.max(1, days.length - 1);
-  const point = (v, i) => `${padX + i * step},${padY + innerH - (v / max) * innerH}`;
-  const grid = [0, .5, 1].map(r => `<line x1="${padX}" y1="${padY + innerH*r}" x2="${width-padX}" y2="${padY + innerH*r}"/>`).join('');
-  const bars = nodes.map((v,i) => `<rect x="${padX+i*step-5}" y="${padY+innerH-(v/max)*innerH}" width="10" height="${Math.max(2,(v/max)*innerH)}" rx="3"/>`).join('');
-  const labels = days.map((d,i) => `<text x="${padX+i*step}" y="${height-8}" text-anchor="middle">${d}</text>`).join('');
-  box.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img"><g class="kb-chart-grid">${grid}</g><g class="kb-chart-bars">${bars}</g><polyline class="kb-chart-line" points="${logs.map(point).join(' ')}"/><g class="kb-chart-labels">${labels}</g></svg>`;
+  const CATS = JSON.parse(document.getElementById('nav-data').textContent);
+  const PALETTE = ['#e74c3c', '#e67e22', '#f1c40f', '#27ae60', '#16a085', '#2980b9', '#8e44ad', '#d35400'];
+  const grid = document.getElementById('navGrid');
+  const tabsBox = document.getElementById('navTabs');
+  const modalEl = document.getElementById('navModal');
+  const modal = new bootstrap.Modal(modalEl);
+  let currentCat = 'all';
+
+  function getCookie(n){var v=null;document.cookie.split(';').forEach(function(c){var p=c.trim().split('=');if(p[0]===n)v=decodeURIComponent(p[1]);});return v;}
+  function postJSON(url, data){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify(data)}).then(function(r){return r.json();});}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  function buildTabs() {
+    let html = `<button type="button" class="kb-nav-tab ${currentCat==='all'?'is-active':''}" data-cat="all" role="tab"><span class="kb-nav-dot"></span>我的常用网址</button>`;
+    CATS.forEach(function (c, i) {
+      html += `<button type="button" class="kb-nav-tab ${currentCat==c.id?'is-active':''}" data-cat="${c.id}" role="tab">` +
+              `<span class="kb-nav-dot" style="background:${PALETTE[i % PALETTE.length]}"></span>${esc(c.name)}` +
+              `<span class="kb-nav-cat-del" data-id="${c.id}" title="删除该分类" role="button">×</span></button>`;
+    });
+    html += `<button type="button" class="kb-nav-tab kb-nav-tab-add" id="navCatAdd" title="新增分类"><i class="bi bi-plus-lg"></i></button>`;
+    tabsBox.innerHTML = html;
+  }
+
+  function siteTile(s) {
+    const letter = (s.name || s.domain || '?').trim().charAt(0).toUpperCase();
+    const color = PALETTE[(s.name || '').length % PALETTE.length];
+    return `<a class="kb-nav-tile" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" data-id="${s.id}">` +
+      `<span class="kb-nav-ico"><span class="kb-nav-letter" style="background:${color}">${esc(letter)}</span>` +
+      `<img class="kb-nav-fav" alt="" loading="lazy" data-try="0" data-domain="${esc(s.domain)}" src="https://api.iowen.cn/favicon/${esc(s.domain)}.png" onerror="navFavFallback(this)"></span>` +
+      `<span class="kb-nav-name" title="${esc(s.url)}">${esc(s.name)}</span>` +
+      `<span class="kb-nav-ops"><button type="button" class="kb-nav-op" data-act="edit" title="编辑"><i class="bi bi-pencil"></i></button>` +
+      `<button type="button" class="kb-nav-op" data-act="del" title="删除"><i class="bi bi-x-lg"></i></button></span></a>`;
+  }
+
+  // 图片加载失败的降级链：iowen → favicon.im → 字母块
+  window.navFavFallback = function (img) {
+    const n = parseInt(img.dataset.try || '0', 10);
+    const d = img.dataset.domain;
+    if (n === 0) { img.dataset.try = '1'; img.src = 'https://favicon.im/' + d + '?larger=true'; }
+    else { img.style.display = 'none'; }
+  };
+
+  function render() {
+    let sites = [];
+    if (currentCat === 'all') {
+      CATS.forEach(function (c) { sites = sites.concat(c.sites); });
+    } else {
+      const c = CATS.find(function (x) { return String(x.id) === String(currentCat); });
+      sites = c ? c.sites : [];
+    }
+    grid.innerHTML = sites.length ? sites.map(siteTile).join('')
+      : '<div class="kb-nav-empty"><i class="bi bi-collection"></i>这个分类还没有网址，点右上角「添加网址」</div>';
+  }
+
+  function refreshTabsAndGrid() { buildTabs(); render(); }
+
+  function fillCatSelect(selectedId) {
+    const sel = document.getElementById('navF_cat');
+    sel.innerHTML = CATS.map(function (c) {
+      return `<option value="${c.id}" ${String(selectedId)===String(c.id)?'selected':''}>${esc(c.name)}</option>`;
+    }).join('');
+  }
+
+  function openModal(site) {
+    document.getElementById('navModalTitle').textContent = site ? '编辑网址' : '添加网址';
+    document.getElementById('navF_id').value = site ? site.id : '';
+    document.getElementById('navF_name').value = site ? site.name : '';
+    document.getElementById('navF_url').value = site ? site.url : '';
+    fillCatSelect(site ? site.category_id : (currentCat === 'all' ? (CATS[0] && CATS[0].id) : currentCat));
+    modal.show();
+  }
+
+  document.getElementById('navAddBtn').addEventListener('click', function () { openModal(null); });
+
+  document.getElementById('navF_save').addEventListener('click', function () {
+    const id = document.getElementById('navF_id').value;
+    const payload = {
+      name: document.getElementById('navF_name').value.trim(),
+      url: document.getElementById('navF_url').value.trim(),
+      category_id: document.getElementById('navF_cat').value,
+    };
+    if (!payload.name || !payload.url) { alert('请填写名称和网址'); return; }
+    const url = id ? '/dashboard/nav/site/' + id + '/edit/' : '/dashboard/nav/site/add/';
+    postJSON(url, payload).then(function (d) {
+      if (d.ok) { modal.hide(); return fetchNav(); }
+      alert(d.error || '保存失败');
+    }).catch(function () { alert('网络错误'); });
+  });
+
+  tabsBox.addEventListener('click', function (e) {
+    const del = e.target.closest('.kb-nav-cat-del');
+    if (del) {
+      e.stopPropagation();
+      const id = del.getAttribute('data-id');
+      const c = CATS.find(function (x) { return String(x.id) === String(id); });
+      if (confirm('删除分类「' + (c ? c.name : '') + '」及其全部网址？')) {
+        postJSON('/dashboard/nav/category/' + id + '/delete/', {}).then(function (d) {
+          if (d.ok) { currentCat = 'all'; fetchNav(); } else { alert(d.error || '删除失败'); }
+        });
+      }
+      return;
+    }
+    if (e.target.closest('#navCatAdd')) {
+      const name = prompt('新增分类名称：');
+      if (name && name.trim()) {
+        postJSON('/dashboard/nav/category/add/', { name: name.trim() }).then(function (d) {
+          if (d.ok) { currentCat = d.id; fetchNav(); } else { alert(d.error || '添加失败'); }
+        });
+      }
+      return;
+    }
+    const tab = e.target.closest('.kb-nav-tab');
+    if (tab) {
+      currentCat = tab.dataset.cat;
+      tabsBox.querySelectorAll('.kb-nav-tab').forEach(function (t) {
+        t.classList.toggle('is-active', t === tab);
+        t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+      });
+      render();
+    }
+  });
+
+  grid.addEventListener('click', function (e) {
+    const op = e.target.closest('.kb-nav-op');
+    if (!op) return;
+    e.preventDefault(); e.stopPropagation();
+    const tile = op.closest('.kb-nav-tile');
+    const id = tile.getAttribute('data-id');
+    let site = null, cat = null;
+    for (const c of CATS) { for (const s of c.sites) { if (String(s.id) === String(id)) { site = s; cat = c; } } }
+    if (op.dataset.act === 'del') {
+      if (confirm('删除「' + (site ? site.name : '') + '」？')) {
+        postJSON('/dashboard/nav/site/' + id + '/delete/', {}).then(function (d) { if (d.ok) fetchNav(); else alert(d.error || '删除失败'); });
+      }
+    } else if (op.dataset.act === 'edit' && site) {
+      site.category_id = cat ? cat.id : '';
+      openModal(site);
+    }
+  });
+
+  function fetchNav() {
+    return fetch('/dashboard/nav/data/').then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { CATS.length = 0; d.categories.forEach(function (c) { CATS.push(c); }); }
+      refreshTabsAndGrid();
+    }).catch(function () { refreshTabsAndGrid(); });
+  }
+
+  refreshTabsAndGrid();
 })();
 </script>
 {% endblock %}

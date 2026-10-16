@@ -86,4 +86,16 @@ class AccessMiddleware:
             return error('；'.join(exception.messages), 422, 'validation_failed')
         from django.db import OperationalError
         if isinstance(exception, OperationalError) and 'locked' in str(exception).lower():
+            # 管理中心的表单提交不是 JSON 接口：返回可读的 HTML 提示而不是裸 JSON。
+            if request.path.startswith('/admin/'):
+                from django.http import HttpResponse
+                return HttpResponse(
+                    '<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
+                    '<title>请稍后重试</title>'
+                    '<body style="font-family:system-ui;padding:48px;text-align:center">'
+                    '<h2 style="font-weight:600">刚才的操作没有保存成功</h2>'
+                    '<p style="color:#666">平台正在执行其它保存任务（如备份），数据库暂时忙碌。</p>'
+                    '<p style="color:#666">请返回上一页重试；若反复出现，请稍等片刻再操作。</p>'
+                    '<p><a href="javascript:history.back()" style="color:#0d6efd">← 返回上一步</a></p>'
+                    '</body></html>', status=503)
             return error('其它操作正在保存，请核对页面后重试', 409, 'write_conflict')

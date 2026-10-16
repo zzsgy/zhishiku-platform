@@ -17,6 +17,7 @@
   <button type="button" data-settings-tab="ai"><i class="bi bi-cpu"></i><span>AI 服务</span></button>
   <button type="button" data-settings-tab="integrations"><i class="bi bi-git"></i><span>外部连接</span></button>
   <button type="button" data-settings-tab="backup"><i class="bi bi-shield-check"></i><span>备份迁移</span></button>
+  <button type="button" data-settings-tab="activity"><i class="bi bi-clock-history"></i><span>活动记录</span></button>
   <button type="button" data-settings-tab="system"><i class="bi bi-diagram-3"></i><span>系统信息</span></button>
 </nav>
 
@@ -53,6 +54,67 @@
   </div>
 </div>
 {{ arch_tree|json_script:'arch-tree-data' }}
+
+<!-- 活动记录：原独立「活动记录」标签收入系统设置（数据口径与导出接口不变） -->
+<div class="card shadow-sm mb-4" data-settings-panel="activity" id="activityPanel">
+  <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span><i class="bi bi-clock-history"></i> 活动记录</span>
+    <span class="small text-muted fw-normal">每一步收集、整理与创作，都会留下可追溯的记录。</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-lg-3">
+        <div class="card shadow-sm">
+          <div class="card-header small fw-semibold">按模块</div>
+          <div class="card-body p-2">
+            <a href="/settings/?tab=activity" class="btn btn-sm w-100 text-start {% if not module %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部</a>
+            {% for m in modules %}
+            <a href="/settings/?tab=activity&amp;module={{ m.module|urlencode }}" class="btn btn-sm w-100 text-start mt-1 {% if module == m.module %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+              {{ m.module }} <span class="text-muted small">{{ m.label }}</span> <span class="badge bg-light text-dark float-end">{{ m.c }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-9">
+        <form class="d-flex gap-2 mb-3" method="get" action="/settings/">
+          <input type="hidden" name="tab" value="activity">
+          {% if module %}<input type="hidden" name="module" value="{{ module }}">{% endif %}
+          <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="搜索操作明细…">
+          <button class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </form>
+        <div class="d-flex gap-2 mb-2">
+          <a class="btn btn-sm btn-outline-secondary" href="/runarchive/export/csv/?module={{ module|urlencode }}&amp;q={{ q|urlencode }}"><i class="bi bi-file-earmark-spreadsheet"></i> 导出 CSV</a>
+          <a class="btn btn-sm btn-outline-secondary" href="/runarchive/export/md/?module={{ module|urlencode }}&amp;q={{ q|urlencode }}"><i class="bi bi-markdown"></i> 导出 Markdown</a>
+        </div>
+        <div class="card shadow-sm">
+          <div class="card-body p-0 table-responsive">
+            <table class="table table-hover mb-0">
+              <thead><tr><th>时间</th><th>模块</th><th>动作</th><th>明细</th></tr></thead>
+              <tbody>
+                {% for l in logs %}
+                <tr>
+                  <td class="small text-muted">{{ l.created|date:'m-d H:i:s' }}</td>
+                  <td><span class="badge bg-light text-dark">{{ l.module }}</span></td>
+                  <td class="small">{{ l.action }}</td>
+                  <td class="small">
+                    <div class="text-muted">{{ l.detail }}</div>
+                    <div class="text-primary" style="font-size:.78rem"><i class="bi bi-lightbulb"></i> {{ l.explain }}</div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-muted py-4">暂无记录</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% include "_pagination.html" %}
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 备份与迁移：三类备份（知识 / 系统 / 迁移），范围差异一屏看清 -->
 <style>
@@ -405,8 +467,21 @@
   tabs.forEach(function (tab) { tab.addEventListener('click', function () { activate(tab.dataset.settingsTab, true); }); });
   var initial = location.hash.replace('#', '');
   if (initial === 'persona') initial = 'profile';
+  /* 支持 /settings/?tab=activity 这类直达链接（活动记录面板、分页等） */
+  var tabParam = new URLSearchParams(location.search).get('tab') || '';
+  if (tabParam) initial = tabParam;
   if (new URLSearchParams(location.search).has('saved') && !initial) initial = 'general';
   activate(initial || 'general', false);
+})();
+
+/* 主题选择与本地缓存保持同步：侧栏快速切换按钮已收入本页（基本设置 → 主题），
+   改动下拉时立即写入 localStorage，避免保存后主题回跳到旧缓存。 */
+(function () {
+  var sel = document.querySelector('select[name="theme"]');
+  if (!sel) return;
+  sel.addEventListener('change', function () {
+    try { localStorage.setItem('kb_theme', sel.value); } catch (e) { /* 忽略存储异常 */ }
+  });
 })();
 
 /* ---------------- 系统架构树状总览渲染器 ---------------- */

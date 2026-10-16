@@ -375,3 +375,43 @@ class LinkItem(models.Model):
             except Exception:
                 pass
         super().save(*args, **kwargs)
+
+
+class NavCategory(models.Model):
+    """工作台首页「常用网址」板块的分类标签。"""
+    name = models.CharField('分类名', max_length=32, unique=True)
+    order = models.IntegerField('排序', default=0)
+    created = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '常用网址分类'
+        verbose_name_plural = '常用网址分类'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return self.name
+
+
+class NavSite(models.Model):
+    """常用网址条目：名称 + 链接，归属一个分类。"""
+    category = models.ForeignKey(NavCategory, on_delete=models.CASCADE, related_name='sites', verbose_name='分类')
+    name = models.CharField('名称', max_length=64)
+    url = models.CharField('网址', max_length=500)
+    order = models.IntegerField('排序', default=0)
+    created = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '常用网址'
+        verbose_name_plural = '常用网址'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def domain(self):
+        from urllib.parse import urlparse
+        try:
+            return urlparse(self.url).netloc or self.url
+        except Exception:
+            return self.url

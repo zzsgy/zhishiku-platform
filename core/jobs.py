@@ -30,8 +30,12 @@ def recover_expired():
                 CollectionItem.objects.filter(pk=job.payload['item_id']).update(status='failed', note='工作进程中断，请检查原件后重试')
     from systemsettings.models import BackupJob
     active_ids = [row['backup_id'] for row in Job.objects.filter(kind='backup', status__in=['pending', 'running']).values_list('payload', flat=True)]
-    BackupJob.objects.filter(status__in=['pending', 'running'], created__lt=timezone.now()-timedelta(minutes=2)).exclude(pk__in=active_ids).update(
-        status='failed', message='旧任务缺少执行记录，已解除阻塞，请重新备份', finished=timezone.now())
+    stale_backup_jobs = BackupJob.objects.filter(status__in=['pending', 'running'], created__lt=timezone.now()-timedelta(minutes=2)).exclude(pk__in=active_ids)
+    # worker 每秒轮询一次；先 exists() 再 update，避免空匹配的 UPDATE 在
+    # DELETE/WAL 混合模式下制造持续性的写锁竞争（曾引发后台 409 写冲突）。
+    if stale_backup_jobs.exists():
+        stale_backup_jobs.update(
+            status='failed', message='旧任务缺少执行记录，已解除阻塞，请重新备份', finished=timezone.now())
 
 
 def run_one():

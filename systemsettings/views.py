@@ -19,6 +19,7 @@ from . import backup_scopes as bk_scopes
 from .backup_engine import scan as bk_scan
 from .reliable_backup import build as bk_build
 from django.db import transaction
+from django.db.models import Count
 from core.jobs import enqueue, recover_expired
 
 
@@ -172,6 +173,17 @@ def index(request):
         'xitong': xi_tong_tree,
     }
 
+    # 活动记录面板（原「活动记录」标签收入系统设置；数据口径与 /runarchive 一致）
+    from runarchive.views import _filter_logs, _explain, MODULE_NAMES
+    from core.pagination import paginate
+    activity_page = paginate(request, _filter_logs(request).order_by('-created', '-pk'), 50)
+    for l in activity_page:
+        l.explain = _explain(l)
+    activity_modules = [
+        {'module': m['module'], 'c': m['c'], 'label': MODULE_NAMES.get(m['module'], m['module'])}
+        for m in OperationLog.objects.values('module').annotate(c=Count('id')).order_by('-c')
+    ]
+
     return render(request, 'settings.html', {
         'arch_sections': arch_sections,
         'arch_tree': arch_tree,
@@ -187,6 +199,10 @@ def index(request):
         'backup_jobs': [j.to_dict() for j in BackupJob.objects.all()[:8]],
         'backup_root': str(settings.BACKUP_ROOT),
         'backup_max_size': settings.BACKUP_MAX_BYTES,
+        # 活动记录
+        'logs': activity_page, 'modules': activity_modules, 'page_obj': activity_page,
+        'module': (request.GET.get('module') or '').strip(),
+        'q': (request.GET.get('q') or '').strip(),
     })
 
 
